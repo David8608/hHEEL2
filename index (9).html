@@ -1,0 +1,2675 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HEEL Colombia · Torre de Control Operativa</title>
+
+<!-- ==================== LIBRERÍAS EXTERNAS (CDN) ==================== -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.25/dist/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+/* ==================================================================
+   TORRE DE CONTROL OPERATIVA — HEEL COLOMBIA
+   Sistema de diseño inspirado en Microsoft Fabric / Power BI / SAC
+   ================================================================== */
+
+:root{
+  --font-display:'Manrope', sans-serif;
+  --font-body:'Inter', sans-serif;
+  --font-mono:'JetBrains Mono', monospace;
+
+  --radius-sm:6px;
+  --radius-md:10px;
+  --radius-lg:14px;
+
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+  --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px; --space-12:48px;
+
+  --success:#0F9D58;
+  --success-bg:rgba(15,157,88,0.12);
+  --warning:#F2A600;
+  --warning-bg:rgba(242,166,0,0.14);
+  --danger:#D13438;
+  --danger-bg:rgba(209,52,56,0.12);
+  --info:#0F6CBD;
+  --info-bg:rgba(15,108,189,0.12);
+}
+
+html[data-theme="light"]{
+  --bg:#F3F4F7;
+  --bg-elevated:#FFFFFF;
+  --card:#FFFFFF;
+  --card-alt:#F8F9FB;
+  --border:#E3E5EA;
+  --border-strong:#CBCFD8;
+  --text:#171A21;
+  --text-secondary:#5B616E;
+  --text-tertiary:#8A8F9B;
+  --accent:#0F6CBD;
+  --accent-strong:#0A4E8A;
+  --accent-soft:rgba(15,108,189,0.10);
+  --shadow:0 1px 2px rgba(20,24,33,0.04), 0 4px 16px rgba(20,24,33,0.04);
+  --shadow-hover:0 2px 4px rgba(20,24,33,0.06), 0 10px 28px rgba(20,24,33,0.08);
+  --map-tile-filter:none;
+  --scroll-thumb:#C7CBD4;
+}
+
+html[data-theme="dark"]{
+  --bg:#0D1017;
+  --bg-elevated:#12151D;
+  --card:#151922;
+  --card-alt:#1A1E28;
+  --border:#262B37;
+  --border-strong:#333947;
+  --text:#EDEEF2;
+  --text-secondary:#9BA1AF;
+  --text-tertiary:#6D7280;
+  --accent:#4FA3F7;
+  --accent-strong:#7FBBFA;
+  --accent-soft:rgba(79,163,247,0.14);
+  --shadow:0 1px 2px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.35);
+  --shadow-hover:0 2px 6px rgba(0,0,0,0.4), 0 12px 32px rgba(0,0,0,0.45);
+  --map-tile-filter:brightness(0.75) invert(1) contrast(0.9) hue-rotate(180deg) saturate(0.6);
+  --scroll-thumb:#333947;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+html{scroll-behavior:smooth;}
+body{
+  font-family:var(--font-body);
+  background:var(--bg);
+  color:var(--text);
+  -webkit-font-smoothing:antialiased;
+  transition:background .25s ease, color .25s ease;
+  min-height:100vh;
+}
+::-webkit-scrollbar{width:10px; height:10px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--scroll-thumb); border-radius:10px;}
+
+a{color:inherit;}
+button{font-family:inherit; cursor:pointer;}
+input,select{font-family:inherit;}
+
+.num{font-family:var(--font-mono); font-variant-numeric:tabular-nums;}
+
+/* ---------- Pantalla de carga ---------- */
+#loadingScreen{
+  position:fixed; inset:0; z-index:9999;
+  background:var(--bg);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:var(--space-5);
+  transition:opacity .4s ease, visibility .4s ease;
+}
+#loadingScreen.hidden{opacity:0; visibility:hidden; pointer-events:none;}
+.loader-mark{
+  width:56px; height:56px; border-radius:50%;
+  border:3px solid var(--border);
+  border-top-color:var(--accent);
+  animation:spin 0.9s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loader-text{font-family:var(--font-display); font-weight:700; font-size:15px; color:var(--text-secondary); letter-spacing:.02em;}
+.loader-bar-track{width:280px; height:4px; background:var(--border); border-radius:4px; overflow:hidden;}
+.loader-bar-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--accent), var(--accent-strong)); transition:width .3s ease;}
+.loader-sub{font-size:12px; color:var(--text-tertiary); font-family:var(--font-mono);}
+
+/* ---------- Layout general ---------- */
+.layout{display:flex; align-items:flex-start;}
+.app{flex:1; min-width:0; max-width:1700px; padding:0 var(--space-8) var(--space-12);}
+@media (max-width:900px){ .app{padding:0 var(--space-4) var(--space-10);} }
+
+/* ---------- Encabezado ---------- */
+header.topbar{
+  position:sticky; top:0; z-index:500;
+  background:var(--bg-elevated);
+  border-bottom:1px solid var(--border);
+  padding:var(--space-4) var(--space-8);
+  display:flex; align-items:center; justify-content:space-between; gap:var(--space-6);
+  flex-wrap:wrap;
+}
+@media (max-width:900px){ header.topbar{padding:var(--space-3) var(--space-4);} }
+
+.brand{display:flex; align-items:center; gap:var(--space-4);}
+.brand-logo{
+  width:44px; height:44px; border-radius:var(--radius-md);
+  background:linear-gradient(135deg, var(--accent), var(--accent-strong));
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-family:var(--font-display); font-weight:800; font-size:16px;
+  flex-shrink:0;
+}
+.brand-text h1{font-family:var(--font-display); font-size:16px; font-weight:800; letter-spacing:.01em;}
+.brand-text p{font-size:12px; color:var(--text-secondary); font-weight:500; margin-top:1px;}
+
+.topbar-right{display:flex; align-items:center; gap:var(--space-5); flex-wrap:wrap;}
+.date-block{text-align:right; font-size:12px; line-height:1.5;}
+.date-block .d-main{font-family:var(--font-mono); font-weight:600; color:var(--text);}
+.date-block .d-sub{color:var(--text-tertiary);}
+
+.btn{
+  border:1px solid var(--border-strong); background:var(--card); color:var(--text);
+  padding:9px 16px; border-radius:var(--radius-sm); font-size:13px; font-weight:600;
+  display:inline-flex; align-items:center; gap:7px; transition:all .15s ease;
+}
+.btn:hover{border-color:var(--accent); color:var(--accent); box-shadow:var(--shadow-hover);}
+.btn-primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+.btn-primary:hover{background:var(--accent-strong); border-color:var(--accent-strong); color:#fff;}
+.btn-ghost{border-color:transparent; background:transparent;}
+.btn-ghost:hover{background:var(--card-alt); box-shadow:none;}
+
+/* ---------- Barra lateral: filtros verticales + navegación en carpetas ---------- */
+.sidebar{
+  width:280px; flex-shrink:0; background:var(--bg-elevated); border-right:1px solid var(--border);
+  position:sticky; top:73px; height:calc(100vh - 73px); display:flex; flex-direction:column;
+  overflow:hidden;
+}
+.sidebar-section{padding:var(--space-5); border-bottom:1px solid var(--border); display:flex; flex-direction:column; min-height:0;}
+.sidebar-title{font-size:11px; font-weight:700; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:var(--space-4);}
+.filters-vertical{display:flex; flex-direction:column; gap:var(--space-3);}
+.filters-vertical .field select, .filters-vertical .field input{width:100%;}
+.filters-actions-vertical{display:flex; gap:var(--space-2); margin-top:var(--space-2);}
+
+.folder-nav{display:flex; flex-direction:column; gap:3px;}
+.folder-header{
+  display:flex; align-items:center; gap:8px; width:100%; padding:10px 10px; border-radius:var(--radius-sm);
+  background:transparent; border:none; font-size:13px; font-weight:700; color:var(--text-secondary); text-align:left;
+}
+.folder-header:hover{background:var(--card-alt); color:var(--text);}
+.folder-header.active{background:var(--accent); color:#fff;}
+
+#btnToggleSidebar{display:none;}
+@media (max-width:1100px){
+  #btnToggleSidebar{display:inline-flex;}
+  .sidebar{
+    position:fixed; top:0; left:0; height:100vh; z-index:900; box-shadow:var(--shadow-hover);
+    transform:translateX(-100%); transition:transform .2s ease;
+  }
+  .sidebar.abierta{transform:translateX(0);}
+}
+.btn-sm{padding:6px 11px; font-size:12px;}
+
+.theme-toggle{display:flex; border:1px solid var(--border-strong); border-radius:20px; padding:3px; gap:2px; background:var(--card);}
+.theme-toggle button{
+  border:none; background:transparent; padding:6px 12px; border-radius:16px; font-size:13px;
+  color:var(--text-tertiary); font-weight:600;
+}
+.theme-toggle button.active{background:var(--accent); color:#fff;}
+
+/* ---------- Filtros (estilo de campo compartido, ahora usado en la barra lateral) ---------- */
+.field{display:flex; flex-direction:column; gap:5px;}
+.field label{font-size:11px; font-weight:700; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.04em;}
+.field select, .field input{
+  border:1px solid var(--border-strong); background:var(--card); color:var(--text);
+  padding:8px 10px; border-radius:var(--radius-sm); font-size:13px; height:36px;
+}
+.field select:focus, .field input:focus{outline:2px solid var(--accent-soft); border-color:var(--accent);}
+
+/* Solo el módulo cuya "carpeta" está activa se muestra; los demás permanecen en el
+   DOM (para que sus datos sigan actualizados) pero ocultos, eliminando el scroll
+   largo por todos los módulos a la vez. */
+#mainContent .module{display:none;}
+#mainContent .module.tab-activa{display:block;}
+
+/* ---------- Contenido / módulos ---------- */
+main{padding-top:var(--space-8);}
+.module{margin-bottom:var(--space-10);}
+.module-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:var(--space-5); gap:var(--space-4); flex-wrap:wrap;}
+.module-head h2{font-family:var(--font-display); font-size:18px; font-weight:800;}
+.module-head .module-eyebrow{font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:.06em; margin-bottom:3px; display:block;}
+.module-head .module-sub{font-size:12.5px; color:var(--text-tertiary);}
+
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg);
+  padding:var(--space-6); box-shadow:var(--shadow); transition:box-shadow .2s ease, transform .2s ease;
+}
+.card.hoverable:hover{box-shadow:var(--shadow-hover); transform:translateY(-2px);}
+
+.grid{display:grid; gap:var(--space-5);}
+.grid-kpi{grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));}
+.grid-2{grid-template-columns:1fr 1fr;}
+.grid-3{grid-template-columns:1fr 1fr 1fr;}
+.grid-map{grid-template-columns:2.3fr 1fr;}
+.grid-idx{grid-template-columns:1fr 2fr;}
+@media (max-width:1400px){ .grid-map{grid-template-columns:1fr;} }
+@media (max-width:900px){ .grid-2,.grid-3,.grid-idx{grid-template-columns:1fr;} }
+
+/* KPI cards */
+.kpi-card{position:relative; overflow:hidden;}
+.kpi-top{display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-3);}
+.kpi-icon{width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px;}
+.kpi-label{font-size:11.5px; font-weight:700; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.03em;}
+.kpi-value{font-family:var(--font-mono); font-size:26px; font-weight:700; letter-spacing:-.01em; margin:2px 0 6px;}
+.kpi-delta{font-size:12px; font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px;}
+.kpi-delta.up{color:var(--success); background:var(--success-bg);}
+.kpi-delta.down{color:var(--danger); background:var(--danger-bg);}
+.kpi-delta.flat{color:var(--text-tertiary); background:var(--card-alt);}
+
+/* Tablas */
+table.data-table{width:100%; border-collapse:collapse; font-size:13px;}
+table.data-table th{
+  text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--text-tertiary);
+  padding:10px 12px; border-bottom:2px solid var(--border); cursor:pointer; user-select:none; white-space:nowrap;
+  position:sticky; top:0; background:var(--card);
+}
+table.data-table th:hover{color:var(--accent);}
+table.data-table td{padding:9px 12px; border-bottom:1px solid var(--border); white-space:nowrap;}
+table.data-table tbody tr:hover{background:var(--card-alt);}
+.table-scroll{overflow:auto; max-height:420px; border-radius:var(--radius-md); border:1px solid var(--border);}
+
+.badge{display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:20px; font-size:11.5px; font-weight:700;}
+.badge.green{color:var(--success); background:var(--success-bg);}
+.badge.yellow{color:var(--warning); background:var(--warning-bg);}
+.badge.red{color:var(--danger); background:var(--danger-bg);}
+.dot{width:8px; height:8px; border-radius:50%; display:inline-block;}
+.dot.green{background:var(--success);} .dot.yellow{background:var(--warning);} .dot.red{background:var(--danger);}
+
+/* Barras horizontales (rankings) */
+.rank-row{display:grid; grid-template-columns:26px 1fr 90px; gap:10px; align-items:center; padding:7px 0;}
+.rank-pos{font-family:var(--font-mono); font-size:11px; color:var(--text-tertiary); font-weight:700;}
+.rank-name{font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.rank-bar-track{height:6px; background:var(--card-alt); border-radius:6px; margin-top:4px; overflow:hidden;}
+.rank-bar-fill{height:100%; background:linear-gradient(90deg, var(--accent), var(--accent-strong)); border-radius:6px;}
+.rank-value{font-family:var(--font-mono); font-size:12.5px; font-weight:700; text-align:right;}
+
+/* Alertas / insights */
+.alert-item, .insight-item{
+  display:flex; gap:12px; align-items:flex-start; padding:12px 14px; border-radius:var(--radius-md);
+  border:1px solid var(--border); margin-bottom:8px; font-size:13px; background:var(--card-alt);
+}
+.alert-item .a-icon{font-size:16px; line-height:1;}
+.alert-item .a-text b{font-weight:700;}
+.insight-item{border-left:3px solid var(--accent);}
+
+/* Gauge */
+.gauge-wrap{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--space-2);}
+.gauge-score{font-family:var(--font-mono); font-size:40px; font-weight:800;}
+.gauge-caption{font-size:12.5px; color:var(--text-secondary); font-weight:600; text-align:center;}
+.gauge-legend{display:flex; gap:var(--space-4); margin-top:var(--space-2); font-size:11px; color:var(--text-tertiary);}
+
+/* Mapa */
+#mapCard{padding:0; overflow:hidden;}
+.map-toolbar{
+  display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap;
+  padding:var(--space-4) var(--space-6); border-bottom:1px solid var(--border);
+}
+.map-toolbar .group{display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;}
+.segmented{display:flex; border:1px solid var(--border-strong); border-radius:var(--radius-sm); overflow:hidden;}
+.segmented button{border:none; background:var(--card); padding:7px 13px; font-size:12.5px; font-weight:700; color:var(--text-secondary);}
+.segmented button.active{background:var(--accent); color:#fff;}
+#mapContainer{height:620px; width:100%;}
+.map-stats-bar{display:flex; gap:var(--space-6); padding:var(--space-4) var(--space-6); flex-wrap:wrap; border-bottom:1px solid var(--border);}
+.map-stat{font-size:12px;}
+.map-stat b{display:block; font-family:var(--font-mono); font-size:18px; font-weight:700; color:var(--text);}
+.map-side{padding:var(--space-6); display:flex; flex-direction:column; gap:var(--space-5);}
+.coverage-panel h3{font-size:13px; font-weight:800; margin-bottom:var(--space-3);}
+.coverage-metric{display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px dashed var(--border); font-size:13px;}
+.coverage-metric b{font-family:var(--font-mono);}
+.leaflet-popup-content-wrapper{background:var(--card); color:var(--text); border-radius:var(--radius-md);}
+.leaflet-popup-tip{background:var(--card);}
+.popup-title{font-weight:800; font-size:13px; margin-bottom:6px;}
+.popup-row{font-size:12px; display:flex; justify-content:space-between; gap:10px; padding:2px 0;}
+
+/* Tabla operativa */
+.table-toolbar{display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); margin-bottom:var(--space-4); flex-wrap:wrap;}
+.search-box{position:relative;}
+.search-box input{padding-left:32px; min-width:240px;}
+.search-box::before{content:"⌕"; position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-tertiary); font-size:15px;}
+.pagination{display:flex; align-items:center; gap:var(--space-3); margin-top:var(--space-4); font-size:12.5px; color:var(--text-secondary);}
+.pagination button{border:1px solid var(--border-strong); background:var(--card); border-radius:var(--radius-sm); padding:5px 10px;}
+.pagination button:disabled{opacity:.4; cursor:not-allowed;}
+
+.chart-box{position:relative; height:280px;}
+.chart-box.tall{height:340px;}
+
+.empty-note{font-size:12.5px; color:var(--text-tertiary); text-align:center; padding:var(--space-6);}
+
+.demo-banner{
+  background:var(--warning-bg); color:var(--warning); border:1px solid var(--warning);
+  padding:10px 16px; border-radius:var(--radius-md); font-size:12.5px; font-weight:600;
+  margin:var(--space-4) 0; display:flex; align-items:center; gap:8px;
+}
+
+footer.app-footer{text-align:center; padding:var(--space-8) 0; font-size:12px; color:var(--text-tertiary);}
+
+@media print{
+  header.topbar, .filters-bar, .btn, .map-toolbar, #themeToggle, .no-print{display:none !important;}
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== PANTALLA DE CARGA ==================== -->
+<div id="loadingScreen">
+  <div class="loader-mark"></div>
+  <div class="loader-text">Cargando Torre de Control Operativa</div>
+  <div class="loader-bar-track"><div class="loader-bar-fill" id="loaderBarFill"></div></div>
+  <div class="loader-sub" id="loaderSubText">Conectando con la fuente de datos…</div>
+</div>
+
+<!-- ==================== ENCABEZADO ==================== -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-logo">HC</div>
+    <div class="brand-text">
+      <h1>HEEL Colombia</h1>
+      <p>Torre de Control Operativa</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="date-block">
+      <div class="d-main" id="fechaActual">--</div>
+      <div class="d-sub">Última actualización: <span id="horaActualizacion">cargando…</span></div>
+    </div>
+    <div class="theme-toggle" id="themeToggle">
+      <button data-theme-btn="light">🌞 Claro</button>
+      <button data-theme-btn="dark">🌙 Oscuro</button>
+    </div>
+    <button class="btn btn-sm" id="btnToggleSidebar">☰ Filtros y módulos</button>
+    <button class="btn btn-primary" id="btnActualizar">↻ Actualizar Datos</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- ==================== BARRA LATERAL: FILTROS + NAVEGACIÓN EN CARPETAS ==================== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">Filtros</div>
+      <div class="filters-vertical">
+        <div class="field"><label>Fecha inicial</label><input type="date" id="fFechaIni"></div>
+        <div class="field"><label>Fecha final</label><input type="date" id="fFechaFin"></div>
+        <div class="field"><label>Ciudad</label><select id="fCiudad"><option value="">Todas</option></select></div>
+        <div class="field"><label>Punto de venta</label><select id="fPunto"><option value="">Todos</option></select></div>
+        <div class="field"><label>Estado</label><select id="fEstado"><option value="">Todos</option></select></div>
+        <div class="filters-actions-vertical">
+          <button class="btn btn-primary btn-sm" id="btnAplicar" style="flex:1;">Aplicar</button>
+          <button class="btn btn-sm" id="btnLimpiar" style="flex:1;">Limpiar</button>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-section" style="flex:1; overflow-y:auto;">
+      <div class="sidebar-title">Módulos</div>
+      <nav class="folder-nav" id="folderNav"></nav>
+    </div>
+  </aside>
+
+  <div class="app">
+    <div id="demoBannerHost"></div>
+    <main id="mainContent"></main>
+    <footer class="app-footer">HEEL Colombia · Torre de Control Operativa · Datos actualizados diariamente a las 09:00 AM</footer>
+  </div>
+</div>
+
+<script>
+/* ==================================================================
+   TORRE DE CONTROL OPERATIVA — HEEL COLOMBIA
+   Lógica de aplicación (100% en memoria tras la carga inicial)
+   ================================================================== */
+
+/* ---------------------------------------------------------------
+   1. CONFIGURACIÓN — reemplace estas URL por las de su Google Sheet
+      publicado como CSV (Archivo > Compartir > Publicar en la Web
+      > seleccionar la hoja > formato CSV).
+   --------------------------------------------------------------- */
+const CONFIG = {
+  // URL del CSV de la hoja "DATA" (spreadsheet: SERVICIOS HEEL 2026).
+  // Se usa el endpoint gviz/tq, que en la práctica soporta CORS para hojas
+  // compartidas como "Cualquier persona con el enlace puede ver" (no requiere
+  // publicación). Si tu hoja es privada, esto seguirá fallando y el dashboard
+  // caerá automáticamente a datos de demostración.
+  //
+  // Alternativas si esta URL no funciona en tu navegador:
+  //  a) Publicar oficialmente: Archivo → Compartir → Publicar en la Web → elige
+  //     la hoja "DATA" → formato CSV → pega esa URL aquí (es la más confiable).
+  //  b) Verifica que el Sheet tenga activado "Cualquier persona con el enlace" (Ver).
+  // URL "Publicada en la Web" (Archivo > Compartir > Publicar en la Web > CSV).
+  // Este método sirve un archivo ya calculado y cacheado por Google (se
+  // actualiza solo cada pocos minutos), evitando el timeout que ocurría al
+  // pedirle a gviz que recalculara en vivo las ~40 columnas con fórmulas de
+  // esta hoja cada vez que alguien abre el dashboard.
+  CSV_URL_DATA: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQTOsET1mPWhGcGaE-5fI09dFjFMbUIw5NALOZx_ePFw_bKDpTwpd_P4rdr9ajMwZmp3HUhY9LTkjji/pub?output=csv",
+  // URL del CSV de la hoja "PROMOCIÓN DE ENTRADAS" (gid confirmado por el usuario).
+  CSV_URL_PROMO: "https://docs.google.com/spreadsheets/d/1kxP2uGR4KOQ1wf1MpCmJOOqQv_kOKlgMRgiu9uYaxXA/gviz/tq?tqx=out:csv&gid=892513436",
+  // Año que corresponde a las columnas ENERO..DICIEMBRE de Promoción de Entradas.
+  ANIO_PROMO: 2026,
+  // (La hora de "Última actualización" ahora se calcula en tiempo real, ver marcarUltimaActualizacion)
+  META_TIEMPO_MINUTOS: 60,     // tiempo objetivo de entrega, usado en el índice operativo
+  UMBRAL_CUMPLIMIENTO: 95,     // % mínimo aceptable de cumplimiento
+  PAGINA_TABLA: 25
+};
+
+/* ---------------------------------------------------------------
+   2. ESTADO GLOBAL EN MEMORIA
+   --------------------------------------------------------------- */
+const STATE = {
+  data: [],            // registros normalizados de la hoja DATA
+  promo: [],           // registros normalizados de la hoja PROMOCIÓN DE ENTRADAS
+  filtered: [],        // subconjunto luego de aplicar filtros
+  previousPeriod: [],  // subconjunto del período anterior equivalente (para variaciones)
+  isDemo: false,
+  charts: {},          // instancias de Chart.js activas
+  map: null,
+  layers: { heat: null, cluster: null, coverageCircle: null, coverageCenterMarker: null },
+  mapMode: 'heat',
+  coverageRadiusKm: 3,
+  tableState: { page: 1, sortField: 'fecha', sortDir: 'desc', search: '' }
+};
+
+/* ---------------------------------------------------------------
+   3. UTILIDADES GENERALES
+   --------------------------------------------------------------- */
+
+// Convierte una letra de columna (ej. "AD") a índice numérico base 0
+function letraAIndice(letra){
+  let idx = 0;
+  for(let i=0;i<letra.length;i++){
+    idx = idx*26 + (letra.charCodeAt(i) - 64);
+  }
+  return idx - 1;
+}
+
+// Normaliza texto: quita tildes, pasa a minúsculas y recorta espacios
+function normalizarTexto(txt){
+  if(txt === null || txt === undefined) return "";
+  return String(txt)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .toLowerCase().trim();
+}
+
+// Busca el índice de una columna por lista de nombres candidatos (comparación normalizada)
+function buscarColumnaPorNombre(headers, candidatos){
+  const normalizados = headers.map(normalizarTexto);
+  for(const cand of candidatos){
+    const nCand = normalizarTexto(cand);
+    let idx = normalizados.findIndex(h => h === nCand);
+    if(idx !== -1) return idx;
+  }
+  for(const cand of candidatos){
+    const nCand = normalizarTexto(cand);
+    let idx = normalizados.findIndex(h => h.includes(nCand));
+    if(idx !== -1) return idx;
+  }
+  return -1;
+}
+
+function parseNumero(val){
+  if(val === null || val === undefined || val === "") return null;
+  const limpio = String(val).replace(/\./g,"").replace(",",".").replace(/[^0-9.\-]/g,"");
+  const n = parseFloat(limpio.replace(/(?!^)-/g,""));
+  return isNaN(n) ? null : n;
+}
+
+function parseNumeroSimple(val){
+  if(val === null || val === undefined || val === "") return null;
+  const bruto = String(val).trim();
+  // Errores de fórmula de Google Sheets: nunca deben interpretarse como 0
+  if(/^#(div\/0!?|n\/a|ref!?|value!?|name\?|null!?|num!?)$/i.test(bruto)) return null;
+  let s = bruto.replace(/[^0-9.,\-]/g,"");
+  if(s.indexOf(",") !== -1 && s.indexOf(".") !== -1){
+    s = s.replace(/\./g,"").replace(",",".");
+  } else if(s.indexOf(",") !== -1){
+    s = s.replace(",",".");
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+// Parser específico para montos en pesos colombianos (Costo, Ticket, Total general).
+// Estos valores llegan desde gviz con el formato de moneda de la celda ya aplicado
+// (ej. "$26,013"), donde la coma es SIEMPRE separador de miles — nunca decimal,
+// porque no existen fracciones de peso en esta hoja. Tratarla como decimal (como
+// hace parseNumeroSimple, pensado para números en convención es-CO) da resultados
+// ~1000 veces menores a los reales.
+function parseMonedaCOP(val){
+  if(val === null || val === undefined || val === "") return null;
+  const bruto = String(val).trim();
+  if(/^#(div\/0!?|n\/a|ref!?|value!?|name\?|null!?|num!?)$/i.test(bruto)) return null;
+  const negativo = bruto.startsWith('-');
+  const soloDigitos = bruto.replace(/[^0-9]/g,"");
+  if(!soloDigitos) return null;
+  const n = parseInt(soloDigitos, 10);
+  if(isNaN(n)) return null;
+  return negativo ? -n : n;
+}
+
+const MESES_ES = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7,
+  agosto:8, septiembre:9, setiembre:9, octubre:10, noviembre:11, diciembre:12 };
+
+// La columna "MES DATA" trae el nombre del mes en texto (ENERO, FEBRERO...),
+// generado a partir de la fecha real y por lo tanto inequívoco. Se usa como
+// referencia de verdad: si la fecha interpretada (M/D o D/M, ambiguo cuando el
+// día es <=12) no coincide con ese mes, se invierte día/mes para reconciliarla.
+function resolverFechaConReferenciaDeMes(valorFecha, valorMesTexto){
+  const fechaBase = parseFechaFlexible(valorFecha);
+  if(!fechaBase) return null;
+  const mesEsperado = MESES_ES[normalizarTexto(valorMesTexto)];
+  if(!mesEsperado) return fechaBase;
+  if(fechaBase.getMonth()+1 === mesEsperado) return fechaBase;
+  const dia = fechaBase.getDate(), mes = fechaBase.getMonth()+1, anio = fechaBase.getFullYear();
+  if(mes >= 1 && mes <= 12){
+    const alterna = new Date(anio, dia-1, mes);
+    if(!isNaN(alterna.getTime()) && alterna.getMonth()+1 === mesEsperado) return alterna;
+  }
+  return fechaBase; // no se pudo reconciliar automáticamente, se deja como estaba
+}
+
+function parseFechaFlexible(val){
+  if(!val) return null;
+  const s = String(val).trim();
+
+  // Formato propio del endpoint gviz/tq de Google Sheets para columnas de tipo
+  // Fecha real: "Date(2026,0,2)" o "Date(2026,0,2,13,20,0)" — el mes viene en base 0.
+  let g = s.match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})(?:,\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}))?\)$/);
+  if(g){
+    const y = parseInt(g[1],10), mes0 = parseInt(g[2],10), dia = parseInt(g[3],10);
+    const fecha = new Date(y, mes0, dia);
+    if(!isNaN(fecha.getTime())) return fecha;
+  }
+
+  // El sheet real usa formato M/D/AAAA (mes primero, estilo usado por el sistema de origen)
+  let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if(m){
+    let p1 = parseInt(m[1],10), p2 = parseInt(m[2],10), y = parseInt(m[3],10);
+    if(y < 100) y += 2000;
+    let mes = p1, dia = p2;
+    if(mes > 12 && dia <= 12){ const tmp = mes; mes = dia; dia = tmp; } // corrige si el mes resulta inválido
+    const fecha = new Date(y, mes-1, dia);
+    if(!isNaN(fecha.getTime())) return fecha;
+  }
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m){
+    const fecha = new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
+    if(!isNaN(fecha.getTime())) return fecha;
+  }
+  const nativa = new Date(s);
+  if(!isNaN(nativa.getTime())) return nativa;
+  return null;
+}
+
+// Convierte duraciones en formato H:MM:SS (columna TIEMPO ENTREGA) a minutos totales
+function parseDuracionMinutos(val){
+  if(val === null || val === undefined || val === "") return null;
+  const s = String(val).trim();
+
+  // gviz/tq envuelve las columnas formateadas como "Hora" con el mismo wrapper
+  // Date(AAAA,M,D,H,Mi,S) — solo interesan las tres últimas partes (hora/min/seg).
+  const g = s.match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2})\)$/);
+  if(g){
+    const h = parseInt(g[4],10), m = parseInt(g[5],10), sec = parseInt(g[6],10);
+    return h*60 + m + sec/60;
+  }
+
+  const partes = s.split(':').map(p=>p.trim());
+  if(partes.length === 3){
+    const h = parseFloat(partes[0].replace(',','.'));
+    const m = parseFloat(partes[1].replace(',','.'));
+    const sec = parseFloat(partes[2].replace(',','.'));
+    if(isNaN(h)||isNaN(m)||isNaN(sec)) return null;
+    return h*60 + m + sec/60;
+  }
+  if(partes.length === 2){
+    const m = parseFloat(partes[0].replace(',','.'));
+    const sec = parseFloat(partes[1].replace(',','.'));
+    if(isNaN(m)||isNaN(sec)) return null;
+    return m + sec/60;
+  }
+  return parseNumeroSimple(val);
+}
+
+// Convierte coordenadas geográficas que pueden venir en distintos formatos:
+// decimal normal (-74.119197), decimal con coma (-74,119197) o con comas de
+// agrupación por formato de celda (-75,558,963,919 => -75.558963919)
+function parseCoordenada(val, esLongitud){
+  if(val === null || val === undefined || val === "") return null;
+  const s = String(val).trim();
+  if(!s) return null;
+  const negativo = s.startsWith('-');
+  const numPuntos = (s.match(/\./g)||[]).length;
+  let resultado = null;
+
+  if(numPuntos >= 1){
+    // Ya tiene un punto decimal explícito: se descartan solo las comas de agrupación
+    resultado = parseFloat(s.replace(/,/g,''));
+  } else if((s.match(/,/g)||[]).length === 0){
+    resultado = parseFloat(s);
+  } else {
+    // Una o más comas sin punto decimal: son separadores de agrupación de celda
+    // (ej. "-75,558,963,919" o "459,387"). Se descartan y se reescala al rango geográfico.
+    const soloDigitos = s.replace(/[^0-9]/g,'');
+    if(!soloDigitos) return null;
+    let n = parseInt(soloDigitos, 10);
+    const limite = esLongitud ? 85 : 15;
+    let iteraciones = 0;
+    while(Math.abs(n) > limite && n !== 0 && iteraciones < 15){ n = n/10; iteraciones++; }
+    resultado = negativo ? -Math.abs(n) : n;
+  }
+  if(resultado === null || isNaN(resultado)) return null;
+  if(resultado === 0) return null; // 0,0 se usa como marcador de coordenada ausente
+  return resultado;
+}
+
+function esCumplido(valor, estadoValor){
+  const n = normalizarTexto(valor);
+  if(["cumple","si","sí","1","true","ok","cumplido","a tiempo","dentro de tiempo"].includes(n)) return true;
+  if(["no cumple","no","0","false","incumple","fuera de tiempo","no cumplido"].includes(n)) return false;
+  const nEstado = normalizarTexto(estadoValor);
+  if(nEstado.includes("cumpl")) return !nEstado.includes("no cumpl") && !nEstado.includes("incump");
+  return null;
+}
+
+function esNovedadValida(valor){
+  const n = normalizarTexto(valor);
+  if(!n) return false;
+  if(["ninguna","n/a","na","no aplica","sin novedad","-","ninguno","#n/d","n/d","nd"].includes(n)) return false;
+  return true;
+}
+
+function formatoNumero(n, decimales=0){
+  if(n === null || n === undefined || isNaN(n)) return "N/D";
+  return n.toLocaleString("es-CO", {minimumFractionDigits:decimales, maximumFractionDigits:decimales});
+}
+function formatoPct(n, decimales=1){
+  if(n === null || n === undefined || isNaN(n)) return "N/D";
+  return n.toLocaleString("es-CO",{minimumFractionDigits:decimales, maximumFractionDigits:decimales}) + "%";
+}
+function formatoMoneda(n){
+  if(n === null || n === undefined || isNaN(n)) return "N/D";
+  return "$" + n.toLocaleString("es-CO",{maximumFractionDigits:0});
+}
+function formatoFecha(d){
+  if(!d) return "N/D";
+  return d.toLocaleDateString("es-CO",{day:"2-digit", month:"2-digit", year:"numeric"});
+}
+
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLon = (lon2-lon1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function debounce(fn, ms){
+  let t;
+  return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn(...args), ms); };
+}
+
+function setLoaderProgress(pct, texto){
+  const fill = document.getElementById('loaderBarFill');
+  const sub = document.getElementById('loaderSubText');
+  if(fill) fill.style.width = pct + "%";
+  if(sub && texto) sub.textContent = texto;
+}
+
+/* ---------------------------------------------------------------
+   4. GENERADOR DE DATOS DE DEMOSTRACIÓN
+      Se activa únicamente si CONFIG.CSV_URL_DATA está vacío o
+      la descarga del CSV publicado falla. Permite validar el
+      dashboard mientras se configura la fuente real.
+   --------------------------------------------------------------- */
+const CIUDADES_DEMO = [
+  {nombre:"Bogotá",      lat:4.7110,  lon:-74.0721, puntos:6},
+  {nombre:"Medellín",    lat:6.2442,  lon:-75.5812, puntos:5},
+  {nombre:"Cali",        lat:3.4516,  lon:-76.5320, puntos:4},
+  {nombre:"Barranquilla",lat:10.9685, lon:-74.7813, puntos:3},
+  {nombre:"Cartagena",   lat:10.3910, lon:-75.4794, puntos:3},
+  {nombre:"Bucaramanga", lat:7.1193,  lon:-73.1227, puntos:3},
+  {nombre:"Pereira",     lat:4.8087,  lon:-75.6906, puntos:2},
+  {nombre:"Manizales",   lat:5.0689,  lon:-75.5174, puntos:2}
+];
+const RESPONSABLES_DEMO = ["C. Ramírez","J. Torres","M. Gómez","L. Peña","A. Rojas","S. Cárdenas","D. Muñoz","P. Salazar","N. Vargas","F. Castillo"];
+const NOVEDADES_DEMO = ["Ninguna","Ninguna","Ninguna","Dirección errada","Cliente ausente","Producto averiado","Retraso en tránsito","Rechazo del cliente","Zona de difícil acceso"];
+const ESTADOS_DEMO = ["Entregado","Entregado","Entregado","Cerrado con novedad","Anulado","En tránsito"];
+const FRANJAS_DEMO = ["07:00 - 09:00","09:00 - 11:00","11:00 - 13:00","13:00 - 15:00","15:00 - 17:00","17:00 - 19:00"];
+const TIPOS_NEGOCIO_DEMO = ["PACIENTE","PACIENTE","VINCULADO","VINCULADO","ADMINISTRATIVO","CONSIGNACION"];
+const MOTIVOS_INCUMPLIMIENTO_DEMO = ["NOVEDAD CALL","HORA DE ALMUERZO","DEMORA CLIENTE","RUTA > 2 PEDIDOS","ALTO VOLUMEN PEDIDOS","NOVEDAD APP","ALTO TRAFICO","DEMORA ALISTAMIENTO PDV"];
+const RESPONSABLES_INCUMPLIMIENTO_DEMO = ["CALL","CLIENTE","HEEL","QUICK","FACTOR EXTERNO"];
+
+function generarDatosDemo(cantidad = 9000){
+  const filas = [];
+  const hoy = new Date();
+  for(let i=0;i<cantidad;i++){
+    const ciudad = CIUDADES_DEMO[Math.floor(Math.random()*CIUDADES_DEMO.length)];
+    const diasAtras = Math.floor(Math.random()*90);
+    const fecha = new Date(hoy); fecha.setDate(fecha.getDate()-diasAtras);
+    const punto = ciudad.nombre + " - PDV " + (Math.floor(Math.random()*ciudad.puntos)+1);
+    const responsable = RESPONSABLES_DEMO[Math.floor(Math.random()*RESPONSABLES_DEMO.length)];
+    const estado = ESTADOS_DEMO[Math.floor(Math.random()*ESTADOS_DEMO.length)];
+    const novedad = estado === "Cerrado con novedad" ? NOVEDADES_DEMO[3+Math.floor(Math.random()*(NOVEDADES_DEMO.length-3))] : "Ninguna";
+    const cumple = estado === "Entregado" ? (Math.random() > 0.08) : (Math.random() > 0.55);
+    const tiempo = Math.max(12, Math.round(35 + Math.random()*70 + (cumple?0:35)));
+    const franja = FRANJAS_DEMO[Math.floor(Math.random()*FRANJAS_DEMO.length)];
+    const jitterLat = (Math.random()-0.5) * 0.18;
+    const jitterLon = (Math.random()-0.5) * 0.18;
+    const tipoNegocio = TIPOS_NEGOCIO_DEMO[Math.floor(Math.random()*TIPOS_NEGOCIO_DEMO.length)];
+    const motivoIncumplimiento = cumple ? "#N/D" : MOTIVOS_INCUMPLIMIENTO_DEMO[Math.floor(Math.random()*MOTIVOS_INCUMPLIMIENTO_DEMO.length)];
+    const responsableIncumplimiento = cumple ? "#N/D" : RESPONSABLES_INCUMPLIMIENTO_DEMO[Math.floor(Math.random()*RESPONSABLES_INCUMPLIMIENTO_DEMO.length)];
+    filas.push({
+      fecha, fechaTexto: formatoFecha(fecha),
+      guia: "GU" + (100000+i),
+      ciudad: ciudad.nombre,
+      punto, responsable, estado,
+      cumple, novedad, tiempo,
+      franja, tipoNegocio, motivoIncumplimiento, responsableIncumplimiento,
+      lat: ciudad.lat + jitterLat, lon: ciudad.lon + jitterLon
+    });
+  }
+  return filas;
+}
+
+function generarPromoDemo(){
+  const largo = [];
+  const resumen = [];
+  CIUDADES_DEMO.forEach(ciudad=>{
+    for(let p=1;p<=ciudad.puntos;p++){
+      const punto = ciudad.nombre + " - PDV " + p;
+      const mensajeros = 1 + Math.floor(Math.random()*2)*0.5;
+      const costo = Math.round(3000000 + Math.random()*9000000);
+      let totalGeneral = 0;
+      for(let mes=1; mes<=7; mes++){
+        const volumen = Math.round(80 + Math.random()*300);
+        const ticket = Math.round(38000 + Math.random()*62000);
+        totalGeneral += volumen;
+        largo.push({ punto, ciudad: ciudad.nombre, mes, anio: CONFIG.ANIO_PROMO, ticket, volumen });
+      }
+      const ticketAnual = Math.round(38000 + Math.random()*62000);
+      resumen.push({ punto, ciudad: ciudad.nombre, clasificacion:"PUNTO", mensajeros, costo, totalGeneral, ticketAnual, costoPorServicio: totalGeneral ? costo/totalGeneral : null });
+    }
+  });
+  return { largo, resumen };
+}
+
+/* ---------------------------------------------------------------
+   5. CARGA Y NORMALIZACIÓN DEL CSV (hoja DATA)
+   --------------------------------------------------------------- */
+function normalizarFilasData(headers, filasCrudas){
+  const idx = {
+    fecha: buscarColumnaPorNombre(headers, ["fecha_entrega","fecha entrega","fecha de servicio","fecha servicio","fecha"]),
+    fechaCreacion: buscarColumnaPorNombre(headers, ["fecha_creacion","fecha creacion","fecha creación"]),
+    guia: buscarColumnaPorNombre(headers, ["guia","guía","numero de guia","no guia"]),
+    ciudad: buscarColumnaPorNombre(headers, ["ciudad"]),
+    punto: buscarColumnaPorNombre(headers, ["punto_venta","punto de venta","punto","pdv"]),
+    estado: buscarColumnaPorNombre(headers, ["estado","estado del servicio"]),
+    cumplimiento: buscarColumnaPorNombre(headers, ["cumplimiento","cumple"]),
+    tiempo: buscarColumnaPorNombre(headers, ["tiempo entrega","tiempo_entrega","tiempo de entrega","tiempo promedio","tiempo (min)","tiempo"]),
+    tipoNegocio: buscarColumnaPorNombre(headers, ["tipo_negocio","tipo negocio","tipo de negocio"]),
+    mesData: buscarColumnaPorNombre(headers, ["mes data","mes_data"]),
+  };
+  // Columnas garantizadas por posición según especificación del proyecto (se resuelven
+  // primero por nombre real de encabezado y, si no existe, caen a la letra especificada)
+  const idxLon = buscarColumnaPorNombre(headers, ["longitud","lon","long","cx"]);
+  const idxLat = buscarColumnaPorNombre(headers, ["latitud","lat","cy"]);
+  const idxFranja = buscarColumnaPorNombre(headers, ["franja horaria","franja_horaria","franja"]);
+  const idxResp = buscarColumnaPorNombre(headers, ["responsable","mensajero","transportador"]);
+  const idxNov = buscarColumnaPorNombre(headers, ["novedad"]);
+
+  idx.lon = idxLon !== -1 ? idxLon : letraAIndice("AD");
+  idx.lat = idxLat !== -1 ? idxLat : letraAIndice("AE");
+  idx.franja = idxFranja !== -1 ? idxFranja : letraAIndice("AK");
+  idx.responsable = idxResp !== -1 ? idxResp : letraAIndice("AL");
+  idx.novedad = idxNov !== -1 ? idxNov : letraAIndice("AM");
+  // Motivo y responsable REALES del incumplimiento (columnas AL y AM del sheet real:
+  // "NOVEDAD CUMPLIMIENTO" y "RESPONSABLE" -categoría de causa raíz, ej. CALL/CLIENTE/
+  // HEEL/QUICK/FACTOR EXTERNO- distintas del mensajero de la columna M). Se resuelven
+  // por posición porque el encabezado "RESPONSABLE" se repite también en la columna M.
+  idx.motivoIncumplimiento = letraAIndice("AL");
+  idx.responsableIncumplimiento = letraAIndice("AM");
+
+  // Contadores de diagnóstico (se exponen en la validación de consola)
+  let totalFilas = 0, sinFechaEntrega = 0, recuperadasPorFechaCreacion = 0, sinFechaAlguna = 0;
+
+  const filas = [];
+  for(const fila of filasCrudas){
+    if(!fila || fila.every(c => c === "" || c === undefined || c === null)) continue;
+    totalFilas++;
+    const get = (i) => (i !== -1 && i < fila.length) ? fila[i] : "";
+    let fecha = resolverFechaConReferenciaDeMes(get(idx.fecha), get(idx.mesData));
+    let fechaEsAproximada = false;
+    if(!fecha){
+      sinFechaEntrega++;
+      // Pedidos sin fecha de entrega (ej. cancelados o aún no cerrados) igual deben
+      // aparecer en las gráficas de línea de tiempo: se usa la fecha de creación
+      // del pedido como respaldo en vez de descartar el registro por completo.
+      fecha = parseFechaFlexible(get(idx.fechaCreacion));
+      if(fecha){ recuperadasPorFechaCreacion++; fechaEsAproximada = true; }
+      else { sinFechaAlguna++; }
+    }
+    const estado = String(get(idx.estado) || "").trim();
+    const cumpleRaw = get(idx.cumplimiento);
+    const lat = parseCoordenada(get(idx.lat), false);
+    const lon = parseCoordenada(get(idx.lon), true);
+    const tiempo = parseDuracionMinutos(get(idx.tiempo));
+
+    filas.push({
+      fecha, fechaTexto: fecha ? formatoFecha(fecha) + (fechaEsAproximada ? " (fecha de creación)" : "") : "",
+      fechaEsAproximada,
+      guia: String(get(idx.guia) || "").trim(),
+      ciudad: String(get(idx.ciudad) || "").trim(),
+      punto: String(get(idx.punto) || "").trim(),
+      responsable: String(get(idx.responsable) || "").trim(),
+      estado,
+      cumple: esCumplido(cumpleRaw, estado),
+      novedad: String(get(idx.novedad) || "").trim(),
+      tiempo,
+      franja: String(get(idx.franja) || "").trim(),
+      tipoNegocio: String(get(idx.tipoNegocio) || "").trim(),
+      motivoIncumplimiento: String(get(idx.motivoIncumplimiento) || "").trim(),
+      responsableIncumplimiento: String(get(idx.responsableIncumplimiento) || "").trim(),
+      lat, lon
+    });
+  }
+  console.log(`Diagnóstico de fechas — filas totales: ${totalFilas}, sin fecha_entrega: ${sinFechaEntrega} (recuperadas con fecha_creación: ${recuperadasPorFechaCreacion}, sin ninguna fecha: ${sinFechaAlguna})`);
+  return filas;
+}
+
+const MESES_PROMO = [
+  {nombre:"ENERO", num:1}, {nombre:"FEBRERO", num:2}, {nombre:"MARZO", num:3},
+  {nombre:"ABRIL", num:4}, {nombre:"MAYO", num:5}, {nombre:"JUNIO", num:6},
+  {nombre:"JULIO", num:7}, {nombre:"AGOSTO", num:8}, {nombre:"SEPTIEMBRE", num:9},
+  {nombre:"OCTUBRE", num:10}, {nombre:"NOVIEMBRE", num:11}, {nombre:"DICIEMBRE", num:12}
+];
+
+// La hoja "PROMOCIÓN DE ENTRADAS" viene en formato ANCHO: una fila por punto de
+// venta, con un par de columnas (volumen, ticket) por cada mes del año, además
+// de Mensajeros y Costo por punto. Se pivotea a formato largo para el análisis
+// mensual, y se conserva también el resumen ancho para el módulo de Per Cápita.
+function normalizarFilasPromo(headers, filasCrudas){
+  const idx = {
+    clasificacion: buscarColumnaPorNombre(headers, ["clasificacion","clasificación"]),
+    punto: buscarColumnaPorNombre(headers, ["punto de venta","punto_venta","punto"]),
+    ciudad: buscarColumnaPorNombre(headers, ["ciudad"]),
+    mensajeros: buscarColumnaPorNombre(headers, ["mensajeros"]),
+    costo: buscarColumnaPorNombre(headers, ["costo"]),
+    totalGeneral: buscarColumnaPorNombre(headers, ["total general"]),
+    ticketAnual: buscarColumnaPorNombre(headers, ["ticket promedio anual","ticket anual"]),
+  };
+  const idxMeses = MESES_PROMO.map(m => ({
+    ...m,
+    idxVolumen: buscarColumnaPorNombre(headers, [m.nombre]),
+    idxTicket: buscarColumnaPorNombre(headers, ["ticket " + m.nombre.toLowerCase()])
+  }));
+
+  const largo = [];   // una fila por punto x mes, para gráficos y rankings mensuales
+  const resumen = [];  // una fila por punto, con mensajeros/costo/total/ticket anual
+
+  for(const fila of filasCrudas){
+    if(!fila || fila.every(c => c === "" || c === undefined || c === null)) continue;
+    const get = (i) => (i !== -1 && i < fila.length) ? fila[i] : "";
+    const punto = String(get(idx.punto) || "").trim();
+    if(!punto) continue;
+    const ciudad = String(get(idx.ciudad) || "").trim();
+    const mensajeros = parseNumeroSimple(get(idx.mensajeros));
+    const costo = parseMonedaCOP(get(idx.costo));
+    const totalGeneral = parseMonedaCOP(get(idx.totalGeneral));
+    const ticketAnual = parseMonedaCOP(get(idx.ticketAnual));
+
+    idxMeses.forEach(m=>{
+      const volumen = parseMonedaCOP(get(m.idxVolumen));
+      const ticket = parseMonedaCOP(get(m.idxTicket)); // #DIV/0! o vacío -> null
+      if(ticket !== null){
+        largo.push({ punto, ciudad, mes:m.num, anio:CONFIG.ANIO_PROMO, ticket, volumen });
+      }
+    });
+
+    resumen.push({
+      punto, ciudad,
+      clasificacion: String(get(idx.clasificacion) || "").trim(),
+      mensajeros, costo, totalGeneral, ticketAnual,
+      costoPorServicio: (costo!==null && totalGeneral) ? costo/totalGeneral : null
+    });
+  }
+  return { largo, resumen };
+}
+
+function descargarCSV(url, timeoutMs = 9000, exigirFilas = true){
+  return new Promise((resolve, reject)=>{
+    if(!url){ reject(new Error("URL vacía")); return; }
+    let finalizado = false;
+    const temporizador = setTimeout(()=>{
+      if(finalizado) return;
+      finalizado = true;
+      reject(new Error("Tiempo de espera agotado descargando el CSV (posible bloqueo CORS o URL privada)"));
+    }, timeoutMs);
+
+    Papa.parse(url, {
+      download:true,
+      skipEmptyLines:true,
+      complete: (res) => {
+        if(finalizado) return;
+        finalizado = true;
+        clearTimeout(temporizador);
+        // Si Google redirige a una página de login o de error, el contenido descargado
+        // es HTML en vez de CSV: se detecta y se rechaza para no mostrar datos basura.
+        const primeraFila = (res.data && res.data[0]) ? res.data[0].join(" ") : "";
+        const pareceHTML = /<!doctype|<html|accounts\.google\.com/i.test(primeraFila);
+        const minimo = exigirFilas ? 2 : 1;
+        if(pareceHTML || !res.data || res.data.length < minimo){
+          reject(new Error("El contenido recibido no es un CSV válido (revisa permisos para compartir del Google Sheet)"));
+          return;
+        }
+        resolve(res.data);
+      },
+      error: (err) => {
+        if(finalizado) return;
+        finalizado = true;
+        clearTimeout(temporizador);
+        reject(err);
+      }
+    });
+  });
+}
+
+// Google (gviz) puede truncar en silencio la respuesta de hojas muy grandes o con
+// muchas columnas calculadas (la hoja DATA tiene ~40 columnas, varias con fórmulas,
+// y crece todos los días), o directamente agotar el tiempo de espera si se pide
+// TODA la hoja de una sola vez. Por eso, en vez de intentar una descarga completa
+// sin límite, se pagina desde el primer request: se piden bloques acotados con
+// OFFSET hasta agotar los datos reales, lo cual es mucho más confiable que una
+// única consulta gigante para un sheet que sigue creciendo.
+async function descargarCSVCompleto(url, avisoProgreso){
+  const TAMANO_PAGINA = 6000;
+  const TIMEOUT_PAGINA = 25000; // 25s: las páginas de una hoja grande con fórmulas tardan más que un CSV simple
+  const MAX_INTENTOS = 60;
+  const MAX_FILAS_TOTAL = 500000;
+
+  let headers = null;
+  let datos = [];
+  let offset = 0;
+  let intentos = 0;
+  let seguir = true;
+
+  while(seguir && intentos < MAX_INTENTOS && datos.length < MAX_FILAS_TOTAL){
+    intentos++;
+    if(avisoProgreso) avisoProgreso(offset);
+    const separador = url.includes('?') ? '&' : '?';
+    const consulta = encodeURIComponent(`select * limit ${TAMANO_PAGINA} offset ${offset}`);
+    const urlPagina = `${url}${separador}tq=${consulta}`;
+
+    let pagina;
+    try{
+      pagina = await descargarCSV(urlPagina, TIMEOUT_PAGINA, offset === 0);
+    }catch(err){
+      console.warn(`No se pudo traer la página del CSV (offset ${offset}):`, err.message || err);
+      if(offset === 0) throw err; // si falla la primerísima página, no hay datos que mostrar: se propaga el error
+      break; // si falla una página posterior, se conservan al menos las ya descargadas
+    }
+    if(!pagina || pagina.length === 0) break;
+
+    if(headers === null){
+      headers = pagina[0];
+      datos = pagina.slice(1);
+    } else {
+      // Cada página repite la fila de encabezado como primera fila; se descarta.
+      datos = datos.concat(pagina.slice(1));
+    }
+
+    const filasEstaPagina = pagina.length - 1;
+    offset += filasEstaPagina;
+    seguir = filasEstaPagina >= TAMANO_PAGINA; // si vino más corta que el límite, ya no hay más datos
+  }
+
+  if(headers === null) throw new Error("No se recibió ninguna página de datos");
+  return [headers, ...datos];
+}
+
+async function cargarDatos(){
+  setLoaderProgress(10, "Conectando con el Google Sheet…");
+  STATE.errorCarga = null;
+  try{
+    if(!CONFIG.CSV_URL_DATA) throw new Error("Sin URL configurada en CONFIG.CSV_URL_DATA");
+    setLoaderProgress(20, "Descargando hoja DATA (archivo publicado, cacheado por Google)…");
+    // El endpoint "Publicado en la Web" sirve un archivo ya calculado (no en
+    // vivo), por lo que una sola descarga basta — no necesita paginación como
+    // el endpoint gviz/tq. Timeout amplio (35s) solo como margen de seguridad
+    // ante una hoja grande o una conexión lenta.
+    const crudasData = await descargarCSV(CONFIG.CSV_URL_DATA, 35000);
+    console.log(`CSV DATA descargado: ${crudasData.length - 1} filas de datos (más encabezado)`);
+    setLoaderProgress(45, "Procesando hoja DATA…");
+    const headersData = crudasData[0];
+
+    // Validación mínima: si no se reconoce ninguna columna clave, probablemente
+    // se descargó el archivo equivocado (HTML de login, hoja vacía, etc.)
+    const tieneEstado = buscarColumnaPorNombre(headersData, ["estado"]) !== -1;
+    const tieneGuia = buscarColumnaPorNombre(headersData, ["guia","guía"]) !== -1;
+    if(!tieneEstado && !tieneGuia){
+      throw new Error("No se reconocieron las columnas esperadas (estado/guía) en el CSV descargado");
+    }
+
+    STATE.data = normalizarFilasData(headersData, crudasData.slice(1));
+    if(STATE.data.length === 0){
+      throw new Error("La hoja DATA se descargó pero no contiene filas de servicios válidas");
+    }
+
+    setLoaderProgress(65, "Procesando hoja PROMOCIÓN DE ENTRADAS…");
+    let promoLargo = [], promoResumen = [];
+    if(CONFIG.CSV_URL_PROMO){
+      const crudasPromo = await descargarCSV(CONFIG.CSV_URL_PROMO);
+      const resultado = normalizarFilasPromo(crudasPromo[0], crudasPromo.slice(1));
+      promoLargo = resultado.largo;
+      promoResumen = resultado.resumen;
+    }
+    STATE.promo = promoLargo;
+    STATE.promoResumen = promoResumen;
+    STATE.isDemo = false;
+  }catch(err){
+    console.warn("No se pudo cargar el CSV real, se usan datos de demostración:", err.message || err);
+    setLoaderProgress(45, "Fuente no disponible, generando datos de demostración…");
+    STATE.errorCarga = (err && err.message) ? err.message : String(err);
+    STATE.data = generarDatosDemo();
+    const demoPromo = generarPromoDemo();
+    STATE.promo = demoPromo.largo;
+    STATE.promoResumen = demoPromo.resumen;
+    STATE.isDemo = true;
+  }
+  setLoaderProgress(90, "Preparando visualización…");
+}
+
+/* ---------------------------------------------------------------
+   6. CONSTRUCCIÓN DEL LAYOUT (todos los módulos)
+   --------------------------------------------------------------- */
+function construirLayout(){
+  const main = document.getElementById('mainContent');
+  main.innerHTML = `
+    <div id="demoBannerSlot"></div>
+
+    <!-- MÓDULO 1: RESUMEN EJECUTIVO -->
+    <section class="module" data-tab="1">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 1</span><h2>Resumen Ejecutivo</h2></div>
+        <div class="module-sub">Indicadores clave del período filtrado, comparados contra el período anterior equivalente</div>
+      </div>
+      <div class="grid grid-kpi" id="kpiGrid"></div>
+    </section>
+
+    <!-- MÓDULO 2 + IDX + GAUGE -->
+    <section class="module" data-tab="2">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 2</span><h2>Índice Operativo</h2></div>
+        <div class="module-sub">Desempeño consolidado 0–100 (cumplimiento, efectividad, tiempo, novedades y ticket)</div>
+      </div>
+      <div class="grid grid-idx">
+        <div class="card" id="gaugeCard"></div>
+        <div class="card">
+          <h3 style="font-size:13px;font-weight:800;margin-bottom:14px;">Composición del índice</h3>
+          <div id="idxBreakdown"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MÓDULO 3: COMPORTAMIENTO OPERATIVO -->
+    <section class="module" data-tab="3">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 3</span><h2>Comportamiento Operativo</h2></div>
+        <div class="module-sub">Volumen de servicios en el tiempo y tendencia</div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card"><h3 class="mini-title">Servicios por día</h3><div class="chart-box"><canvas id="chartPorDia"></canvas></div></div>
+        <div class="card"><h3 class="mini-title">Servicios por mes</h3><div class="chart-box"><canvas id="chartPorMes"></canvas></div></div>
+      </div>
+      <div class="grid grid-2" style="margin-top:20px;">
+        <div class="card"><h3 class="mini-title">Comparativo mensual</h3><div class="chart-box"><canvas id="chartComparativo"></canvas></div></div>
+        <div class="card"><h3 class="mini-title">Tendencia (media móvil 7 días)</h3><div class="chart-box"><canvas id="chartTendencia"></canvas></div></div>
+      </div>
+    </section>
+
+    <!-- MÓDULO 4: CUMPLIMIENTO -->
+    <section class="module" data-tab="4">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 4</span><h2>Cumplimiento</h2></div>
+        <div class="module-sub">Semáforo: 🟢 ≥95%&nbsp;&nbsp;🟡 85–95%&nbsp;&nbsp;🔴 &lt;85%</div>
+      </div>
+      <div class="grid grid-3">
+        <div class="card"><h3 class="mini-title">Por ciudad</h3><div class="table-scroll" id="tablaCumpCiudad"></div></div>
+        <div class="card"><h3 class="mini-title">Por punto de venta</h3><div class="table-scroll" id="tablaCumpPunto"></div></div>
+        <div class="card"><h3 class="mini-title">Por responsable</h3><div class="table-scroll" id="tablaCumpResponsable"></div></div>
+      </div>
+    </section>
+
+    <!-- MÓDULO 5: PRODUCTIVIDAD -->
+    <section class="module" data-tab="5">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 5</span><h2>Productividad por Franja Horaria</h2></div>
+        <div class="module-sub">Distribución de la operación a lo largo del día</div>
+      </div>
+      <div class="card"><div class="table-scroll" id="tablaFranja"></div></div>
+    </section>
+
+    <!-- MÓDULO 6: NOVEDADES -->
+    <section class="module" data-tab="6">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 6</span><h2>Novedades</h2></div>
+        <div class="module-sub">Principales causas y responsables asociados</div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card"><h3 class="mini-title">Top novedades</h3><div id="rankNovedades"></div></div>
+        <div class="card"><h3 class="mini-title">Top responsables con novedades</h3><div id="rankRespNovedades"></div></div>
+      </div>
+      <div class="grid grid-2" style="margin-top:20px;">
+        <div class="card"><h3 class="mini-title">Distribución por ciudad</h3><div class="chart-box"><canvas id="chartNovCiudad"></canvas></div></div>
+        <div class="card"><h3 class="mini-title">Distribución por punto</h3><div class="chart-box"><canvas id="chartNovPunto"></canvas></div></div>
+      </div>
+    </section>
+
+    <!-- MÓDULO 7: SEGMENTACIÓN POR TIPO DE NEGOCIO -->
+    <section class="module" data-tab="7">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 7</span><h2>Segmentación por Tipo de Negocio</h2></div>
+        <div class="module-sub">Paciente, Vinculado, Administrativo y Consignación — volumen y tiempo de gestión</div>
+      </div>
+      <div class="card"><div class="table-scroll" id="tablaTipoNegocio"></div></div>
+    </section>
+
+    <!-- MÓDULO 8: PEDIDOS SIN CUMPLIMIENTO DE ENTREGA -->
+    <section class="module" data-tab="8">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 8</span><h2>Pedidos sin Cumplimiento de Entrega</h2></div>
+        <div class="module-sub">Motivo real y responsable de cada incumplimiento (columnas Novedad Cumplimiento / Responsable)</div>
+      </div>
+      <div class="grid grid-kpi" style="margin-bottom:20px;" id="kpiSinCumplimiento"></div>
+      <div class="grid grid-2">
+        <div class="card"><h3 class="mini-title">Por motivo</h3><div class="chart-box tall"><canvas id="chartMotivoIncumplimiento"></canvas></div></div>
+        <div class="card"><h3 class="mini-title">Por responsable</h3><div id="rankResponsableIncumplimiento"></div></div>
+      </div>
+    </section>
+
+    <!-- MÓDULO 9: TICKET PROMEDIO -->
+    <section class="module" data-tab="9">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 9</span><h2>Ticket Promedio</h2></div>
+        <div class="module-sub">Fuente: hoja Promoción de Entradas</div>
+      </div>
+      <div class="grid grid-3">
+        <div class="card kpi-card">
+          <div class="kpi-label">Ticket promedio nacional</div>
+          <div class="kpi-value num" id="ticketNacional">--</div>
+        </div>
+        <div class="card"><h3 class="mini-title">Ticket promedio mensual</h3><div class="chart-box"><canvas id="chartTicketMensual"></canvas></div></div>
+        <div class="card"><h3 class="mini-title">Ranking por punto</h3><div id="rankTicketPunto"></div></div>
+      </div>
+      <div class="card" style="margin-top:20px;"><h3 class="mini-title">Tabla comparativa</h3><div class="table-scroll" id="tablaTicket"></div></div>
+      <div class="card" style="margin-top:20px;">
+        <h3 class="mini-title">Per Cápita — Costo por servicio entregado</h3>
+        <div class="module-sub" style="margin-bottom:14px;">Costo operativo fijo del punto (columna Costo) dividido entre el total de servicios del año — a menor valor, mayor eficiencia</div>
+        <div class="table-scroll" id="tablaPerCapita"></div>
+      </div>
+    </section>
+
+    <!-- MÓDULO 10: RANKING NACIONAL -->
+    <section class="module" data-tab="10">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 10</span><h2>Ranking Nacional</h2></div>
+        <div class="module-sub">Comparativo consolidado de todas las dimensiones operativas</div>
+      </div>
+      <div class="grid grid-3">
+        <div class="card"><h3 class="mini-title">Top ciudades (volumen)</h3><div id="rankCiudades"></div></div>
+        <div class="card"><h3 class="mini-title">Top puntos (volumen)</h3><div id="rankPuntos"></div></div>
+        <div class="card"><h3 class="mini-title">Top responsables (volumen)</h3><div id="rankResponsables"></div></div>
+      </div>
+      <div class="grid grid-3" style="margin-top:20px;">
+        <div class="card"><h3 class="mini-title">Top novedades</h3><div id="rankNovedades2"></div></div>
+        <div class="card"><h3 class="mini-title">Mejores tiempos (más rápidos)</h3><div id="rankTiempos"></div></div>
+        <div class="card"><h3 class="mini-title">Mejor cumplimiento</h3><div id="rankCumplimiento"></div></div>
+      </div>
+    </section>
+
+    <!-- MÓDULO 9: CENTRO DE ALERTAS -->
+    <section class="module" data-tab="11">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 11</span><h2>Centro de Alertas</h2></div>
+        <div class="module-sub">Generadas automáticamente a partir de los datos filtrados</div>
+      </div>
+      <div class="card" id="panelAlertas"></div>
+    </section>
+
+    <!-- MÓDULO 10: INSIGHTS DEL DÍA -->
+    <section class="module" data-tab="12">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 12</span><h2>Insights del Día</h2></div>
+        <div class="module-sub">Lectura automática del comportamiento operativo</div>
+      </div>
+      <div class="card" id="panelInsights"></div>
+    </section>
+
+    <!-- MÓDULO 11: MAPA NACIONAL DE SERVICIOS -->
+    <section class="module" data-tab="13">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 13</span><h2>Mapa Nacional de Servicios</h2></div>
+        <div class="module-sub">Herramienta de análisis operativo y cobertura geográfica</div>
+      </div>
+      <div class="card" id="mapCard">
+        <div class="map-stats-bar" id="mapStatsBar"></div>
+        <div class="map-toolbar">
+          <div class="group">
+            <div class="segmented" id="mapModeToggle">
+              <button data-mode="heat" class="active">🔥 Heatmap</button>
+              <button data-mode="markers">📍 Marcadores</button>
+            </div>
+          </div>
+          <div class="group">
+            <label style="font-size:12px;color:var(--text-secondary);font-weight:700;">Radio de cobertura:</label>
+            <div class="segmented" id="radioToggle">
+              <button data-radio="1">1 km</button>
+              <button data-radio="3" class="active">3 km</button>
+              <button data-radio="5">5 km</button>
+              <button data-radio="10">10 km</button>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-map" style="gap:0;">
+          <div id="mapContainer"></div>
+          <div class="map-side">
+            <div class="coverage-panel">
+              <h3>📍 Círculo de cobertura</h3>
+              <div class="module-sub" style="margin-bottom:10px;">Clic en un marcador o en el mapa para definir el centro del análisis.</div>
+              <div id="coverageStats" class="empty-note">Seleccione un punto en el mapa para calcular la cobertura.</div>
+            </div>
+            <div class="coverage-panel">
+              <h3>Ir a ciudad</h3>
+              <select id="mapCitySelect" style="width:100%; height:36px; border-radius:8px; border:1px solid var(--border-strong); background:var(--card); color:var(--text); padding:0 10px;">
+                <option value="">Seleccione una ciudad…</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MÓDULO 12: TABLA OPERATIVA -->
+    <section class="module" data-tab="14">
+      <div class="module-head">
+        <div><span class="module-eyebrow">Módulo 14</span><h2>Tabla Operativa</h2></div>
+        <div class="module-sub">Detalle completo de servicios filtrados</div>
+      </div>
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box"><input type="text" id="tablaBuscar" placeholder="Buscar guía, ciudad, punto, responsable…"></div>
+          <div class="group" style="display:flex; gap:8px;">
+            <button class="btn btn-sm" id="btnExportExcel">⬇ Excel</button>
+            <button class="btn btn-sm" id="btnExportPDF">⬇ PDF</button>
+            <button class="btn btn-sm" id="btnImprimir">🖨 Imprimir</button>
+          </div>
+        </div>
+        <div class="table-scroll" style="max-height:520px;">
+          <table class="data-table" id="tablaOperativa">
+            <thead><tr>
+              <th data-field="fecha">Fecha</th><th data-field="guia">Guía</th><th data-field="ciudad">Ciudad</th>
+              <th data-field="punto">Punto</th><th data-field="responsable">Responsable</th><th data-field="estado">Estado</th>
+              <th data-field="cumple">Cumplimiento</th><th data-field="tiempo">Tiempo</th><th data-field="novedad">Novedad</th>
+            </tr></thead>
+            <tbody id="tablaOperativaBody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="tablaPaginacion"></div>
+      </div>
+    </section>
+  `;
+
+  const style = document.createElement('style');
+  style.textContent = `.mini-title{font-size:13px;font-weight:800;margin-bottom:14px;}`;
+  document.head.appendChild(style);
+
+  if(STATE.isDemo){
+    const motivo = STATE.errorCarga ? ` (${STATE.errorCarga})` : "";
+    document.getElementById('demoBannerSlot').innerHTML =
+      `<div class="demo-banner">⚠ Modo demostración: no se pudo leer el Google Sheet real${motivo}. Configure <span class="num">CONFIG.CSV_URL_DATA</span> y <span class="num">CONFIG.CSV_URL_PROMO</span> con URL publicadas como CSV (Archivo → Compartir → Publicar en la Web → esta hoja → formato CSV). Mientras tanto, se muestran datos simulados.</div>`;
+  }
+}
+
+/* ---------------------------------------------------------------
+   7. FILTROS
+   --------------------------------------------------------------- */
+function poblarSelect(id, valores){
+  const sel = document.getElementById(id);
+  const actual = sel.value;
+  const primeraOpcion = sel.querySelector('option').outerHTML;
+  const unicos = [...new Set(valores.filter(v=>v && v.trim() !== ""))].sort((a,b)=>a.localeCompare(b,'es'));
+  sel.innerHTML = primeraOpcion + unicos.map(v=>`<option value="${v.replace(/"/g,'&quot;')}">${v}</option>`).join('');
+  if(unicos.includes(actual)) sel.value = actual;
+}
+
+function poblarFiltros(){
+  poblarSelect('fCiudad', STATE.data.map(d=>d.ciudad));
+  poblarSelect('fPunto', STATE.data.map(d=>d.punto));
+  poblarSelect('fEstado', STATE.data.map(d=>d.estado));
+
+  const fechasValidas = STATE.data.map(d=>d.fecha).filter(Boolean);
+  if(fechasValidas.length){
+    const min = new Date(Math.min(...fechasValidas));
+    const max = new Date(Math.max(...fechasValidas));
+    document.getElementById('fFechaIni').value = toInputDate(min);
+    document.getElementById('fFechaFin').value = toInputDate(max);
+  }
+
+  const citySelect = document.getElementById('mapCitySelect');
+  const ciudadesUnicas = [...new Set(STATE.data.map(d=>d.ciudad).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  citySelect.innerHTML = '<option value="">Seleccione una ciudad…</option>' + ciudadesUnicas.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
+function toInputDate(d){
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function leerFiltrosActuales(){
+  return {
+    fechaIni: document.getElementById('fFechaIni').value ? new Date(document.getElementById('fFechaIni').value + 'T00:00:00') : null,
+    fechaFin: document.getElementById('fFechaFin').value ? new Date(document.getElementById('fFechaFin').value + 'T23:59:59') : null,
+    ciudad: document.getElementById('fCiudad').value,
+    punto: document.getElementById('fPunto').value,
+    estado: document.getElementById('fEstado').value
+  };
+}
+
+function coincideFiltros(fila, f){
+  if(f.fechaIni && fila.fecha && fila.fecha < f.fechaIni) return false;
+  if(f.fechaFin && fila.fecha && fila.fecha > f.fechaFin) return false;
+  if(f.ciudad && fila.ciudad !== f.ciudad) return false;
+  if(f.punto && fila.punto !== f.punto) return false;
+  if(f.estado && fila.estado !== f.estado) return false;
+  return true;
+}
+
+// Calcula el rango de fechas del período inmediatamente anterior y de igual
+// duración al seleccionado (ej. si el filtro es todo marzo, devuelve todo
+// febrero). Se reutiliza tanto para las métricas de DATA como para el
+// Ticket Promedio, de modo que ambos respeten el mismo período de comparación.
+function calcularRangoPeriodoAnterior(f){
+  if(!f.fechaIni || !f.fechaFin) return null;
+  const duracionMs = f.fechaFin - f.fechaIni;
+  const finAnterior = new Date(f.fechaIni.getTime() - 1);
+  const iniAnterior = new Date(f.fechaIni.getTime() - duracionMs - 1);
+  return { fechaIni: iniAnterior, fechaFin: finAnterior };
+}
+
+function calcularPeriodoAnterior(f){
+  const rango = calcularRangoPeriodoAnterior(f);
+  if(!rango) return [];
+  return STATE.data.filter(fila => {
+    if(!fila.fecha) return false;
+    if(fila.fecha < rango.fechaIni || fila.fecha > rango.fechaFin) return false;
+    const fSinFecha = {...f, fechaIni:null, fechaFin:null};
+    return coincideFiltros(fila, fSinFecha);
+  });
+}
+
+function aplicarFiltros(){
+  const f = leerFiltrosActuales();
+  STATE.filtered = STATE.data.filter(fila => coincideFiltros(fila, f));
+  STATE.previousPeriod = calcularPeriodoAnterior(f);
+  STATE.tableState.page = 1;
+  renderizarTodo();
+}
+
+function limpiarFiltros(){
+  document.getElementById('fCiudad').value = "";
+  document.getElementById('fPunto').value = "";
+  document.getElementById('fEstado').value = "";
+  const fechasValidas = STATE.data.map(d=>d.fecha).filter(Boolean);
+  if(fechasValidas.length){
+    document.getElementById('fFechaIni').value = toInputDate(new Date(Math.min(...fechasValidas)));
+    document.getElementById('fFechaFin').value = toInputDate(new Date(Math.max(...fechasValidas)));
+  }
+  aplicarFiltros();
+}
+
+/* ---------------------------------------------------------------
+   8. MOTOR DE MÉTRICAS
+   --------------------------------------------------------------- */
+function calcularMetricas(filas){
+  const total = filas.length;
+  const entregados = filas.filter(f=>normalizarTexto(f.estado).includes('entreg')).length;
+  const cerradosNovedad = filas.filter(f=>normalizarTexto(f.estado).includes('novedad')).length;
+  const cancelados = filas.filter(f=>normalizarTexto(f.estado).includes('cancel')).length;
+  const conCumpleDefinido = filas.filter(f=>f.cumple !== null);
+  const cumplen = conCumpleDefinido.filter(f=>f.cumple === true).length;
+  const cumplimiento = conCumpleDefinido.length ? (cumplen/conCumpleDefinido.length*100) : null;
+  const efectividad = total ? (entregados/total*100) : null;
+  const tiempos = filas.map(f=>f.tiempo).filter(t=>t !== null && t !== undefined && !isNaN(t));
+  const tiempoProm = tiempos.length ? tiempos.reduce((a,b)=>a+b,0)/tiempos.length : null;
+  const novedadesCount = filas.filter(f=>esNovedadValida(f.novedad)).length;
+  const ciudadesActivas = new Set(filas.map(f=>f.ciudad).filter(Boolean)).size;
+  const puntosActivos = new Set(filas.map(f=>f.punto).filter(Boolean)).size;
+  return { total, entregados, cerradosNovedad, cancelados, cumplimiento, efectividad, tiempoProm, novedadesCount, ciudadesActivas, puntosActivos };
+}
+
+// Determina si el mes/año de un registro de Promoción de Entradas cae dentro
+// del rango de fechas seleccionado en los filtros (comparando por mes calendario,
+// ya que esa hoja solo trae granularidad mensual, no por día).
+function mesEnRango(anio, mes, fechaIni, fechaFin){
+  if(anio == null || mes == null) return true; // sin período conocido: se conserva
+  const inicioMes = new Date(anio, mes-1, 1);
+  const finMes = new Date(anio, mes, 0, 23, 59, 59);
+  if(fechaIni && finMes < fechaIni) return false;
+  if(fechaFin && inicioMes > fechaFin) return false;
+  return true;
+}
+
+// "Oficina Principal" (y equivalentes administrativos) no son puntos de venta
+// reales: en la hoja Promoción de Entradas aparecen con 1 servicio/mes y un
+// "ticket" igual a su costo fijo mensual completo (varios millones de pesos),
+// lo cual distorsiona cualquier promedio en el que se incluyan. Se cuentan y
+// se muestran por separado, pero se excluyen de todos los cálculos de promedio.
+function esPuntoAdministrativo(nombrePunto){
+  const n = normalizarTexto(nombrePunto);
+  return n.includes('oficina principal') || n.includes('oficina admin');
+}
+
+function calcularTicketPromedio(promoFilas, filtros){
+  let subset = promoFilas.filter(p=>!esPuntoAdministrativo(p.punto));
+  if(filtros && filtros.ciudad) subset = subset.filter(p=>normalizarTexto(p.ciudad) === normalizarTexto(filtros.ciudad));
+  if(filtros && filtros.punto) subset = subset.filter(p=>normalizarTexto(p.punto) === normalizarTexto(filtros.punto));
+  if(filtros && (filtros.fechaIni || filtros.fechaFin)){
+    subset = subset.filter(p=>mesEnRango(p.anio, p.mes, filtros.fechaIni, filtros.fechaFin));
+  }
+  const validos = subset.map(p=>p.ticket).filter(t=>t !== null && t !== undefined && !isNaN(t));
+  return validos.length ? validos.reduce((a,b)=>a+b,0)/validos.length : null;
+}
+
+function calcularVariacion(actual, anterior){
+  if(actual === null || anterior === null || anterior === undefined || anterior === 0) return null;
+  return ((actual-anterior)/Math.abs(anterior))*100;
+}
+
+function calcularIndiceOperativo(m){
+  const scoreCumplimiento = m.cumplimiento ?? 0;
+  const scoreEfectividad = m.efectividad ?? 0;
+  let scoreTiempo = 0;
+  if(m.tiempoProm !== null){
+    scoreTiempo = Math.max(0, Math.min(100, 100 - ((m.tiempoProm - CONFIG.META_TIEMPO_MINUTOS) / CONFIG.META_TIEMPO_MINUTOS * 100)));
+  }
+  const pctNovedades = m.total ? (m.novedadesCount/m.total*100) : 0;
+  const scoreNovedades = Math.max(0, 100 - pctNovedades*4);
+  const ticketProm = calcularTicketPromedio(STATE.promo, {});
+  const ticketActual = calcularTicketPromedio(STATE.promo, leerFiltrosActuales());
+  let scoreTicket = 60;
+  if(ticketProm && ticketActual){
+    scoreTicket = Math.max(0, Math.min(100, 50 + ((ticketActual-ticketProm)/ticketProm*100)));
+  }
+  const indice = (scoreCumplimiento*0.30 + scoreEfectividad*0.25 + scoreTiempo*0.20 + scoreNovedades*0.15 + scoreTicket*0.10);
+  return {
+    total: Math.round(Math.max(0,Math.min(100,indice))),
+    partes: {
+      cumplimiento: Math.round(scoreCumplimiento), efectividad: Math.round(scoreEfectividad),
+      tiempo: Math.round(scoreTiempo), novedades: Math.round(scoreNovedades), ticket: Math.round(scoreTicket)
+    }
+  };
+}
+
+function agregarPor(filas, campo){
+  const grupos = new Map();
+  filas.forEach(f=>{
+    const key = f[campo] || "Sin dato";
+    if(!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push(f);
+  });
+  const resultado = [];
+  grupos.forEach((subset, key)=>{
+    const m = calcularMetricas(subset);
+    resultado.push({ nombre:key, ...m });
+  });
+  return resultado;
+}
+
+/* ---------------------------------------------------------------
+   9. RENDER — MÓDULO 1: RESUMEN EJECUTIVO
+   --------------------------------------------------------------- */
+function iconoSemaforo(valor, bueno, medio){
+  if(valor === null || valor === undefined) return 'gray';
+  if(valor >= bueno) return 'green';
+  if(valor >= medio) return 'yellow';
+  return 'red';
+}
+
+function renderKPIs(){
+  const m = calcularMetricas(STATE.filtered);
+  const mAnt = calcularMetricas(STATE.previousPeriod);
+  const f = leerFiltrosActuales();
+  const ticketActual = calcularTicketPromedio(STATE.promo, f);
+  const rangoAnterior = calcularRangoPeriodoAnterior(f);
+  const ticketAnterior = rangoAnterior
+    ? calcularTicketPromedio(STATE.promo, {...f, fechaIni: rangoAnterior.fechaIni, fechaFin: rangoAnterior.fechaFin})
+    : null;
+
+  const tarjetas = [
+    { label:"Total servicios", valor:formatoNumero(m.total), icon:"📦", color:"info", delta:calcularVariacion(m.total, mAnt.total) },
+    { label:"Entregados", valor:formatoNumero(m.entregados), icon:"✅", color:"success", delta:calcularVariacion(m.entregados, mAnt.entregados) },
+    { label:"Cerrados con novedad", valor:formatoNumero(m.cerradosNovedad), icon:"⚠️", color:"warning", delta:calcularVariacion(m.cerradosNovedad, mAnt.cerradosNovedad), invertido:true },
+    { label:"Cancelados", valor:formatoNumero(m.cancelados), icon:"🚫", color:"danger", delta:calcularVariacion(m.cancelados, mAnt.cancelados), invertido:true },
+    { label:"Cumplimiento", valor:formatoPct(m.cumplimiento), icon:"🎯", color:"info", delta:calcularVariacion(m.cumplimiento, mAnt.cumplimiento) },
+    { label:"Efectividad", valor:formatoPct(m.efectividad), icon:"📈", color:"success", delta:calcularVariacion(m.efectividad, mAnt.efectividad) },
+    { label:"Tiempo promedio", valor:(m.tiempoProm!==null? formatoNumero(m.tiempoProm,0)+" min":"N/D"), icon:"⏱️", color:"warning", delta:calcularVariacion(m.tiempoProm, mAnt.tiempoProm), invertido:true },
+    { label:"Ticket promedio", valor:formatoMoneda(ticketActual), icon:"💳", color:"info", delta:calcularVariacion(ticketActual, ticketAnterior) },
+    { label:"Ciudades activas", valor:formatoNumero(m.ciudadesActivas), icon:"🏙️", color:"info", delta:null },
+    { label:"Puntos activos", valor:formatoNumero(m.puntosActivos), icon:"🏬", color:"info", delta:null }
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = tarjetas.map(t=>{
+    let deltaHtml = '<span class="kpi-delta flat">— sin comparación</span>';
+    if(t.delta !== null && t.delta !== undefined && !isNaN(t.delta)){
+      const positivo = t.invertido ? t.delta < 0 : t.delta > 0;
+      const clase = t.delta === 0 ? 'flat' : (positivo ? 'up' : 'down');
+      const flecha = t.delta === 0 ? '→' : (positivo ? '▲' : '▼');
+      deltaHtml = `<span class="kpi-delta ${clase}">${flecha} ${formatoPct(Math.abs(t.delta),1)}</span>`;
+    }
+    return `
+      <div class="card kpi-card hoverable">
+        <div class="kpi-top">
+          <span class="kpi-label">${t.label}</span>
+          <div class="kpi-icon" style="background:var(--${t.color}-bg); color:var(--${t.color});">${t.icon}</div>
+        </div>
+        <div class="kpi-value">${t.valor}</div>
+        ${deltaHtml}
+      </div>`;
+  }).join('');
+}
+
+/* ---------------------------------------------------------------
+   10. RENDER — MÓDULO 2: ÍNDICE OPERATIVO (GAUGE)
+   --------------------------------------------------------------- */
+function dibujarGauge(score){
+  const cx=150, cy=150, r=110;
+  const anguloInicio = 180, anguloFin = 0;
+  const anguloScore = 180 - (score/100*180);
+  const rad = (deg)=> (deg*Math.PI/180);
+  const puntoArco = (angDeg, radio)=>{
+    const rad2 = angDeg*Math.PI/180;
+    return [cx - radio*Math.cos(rad2), cy - radio*Math.sin(rad2)];
+  };
+  const [nx, ny] = puntoArco(anguloScore, r-18);
+  const color = score >= 70 ? 'var(--success)' : (score >= 40 ? 'var(--warning)' : 'var(--danger)');
+
+  const zonas = [
+    {desde:180, hasta:180-72, color:'var(--danger)'},
+    {desde:180-72, hasta:180-144, color:'var(--warning)'},
+    {desde:180-144, hasta:0, color:'var(--success)'}
+  ];
+  const arcos = zonas.map(z=>{
+    const [x1,y1] = puntoArco(z.desde, r);
+    const [x2,y2] = puntoArco(z.hasta, r);
+    const largo = (z.desde - z.hasta) > 180 ? 1 : 0;
+    return `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largo} 1 ${x2} ${y2}" stroke="${z.color}" stroke-width="20" fill="none" stroke-linecap="butt" opacity="0.85"/>`;
+  }).join('');
+
+  return `
+  <svg viewBox="0 0 300 175" style="width:100%; max-width:320px; overflow:visible;">
+    ${arcos}
+    <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="var(--text)" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="8" fill="var(--text)"/>
+  </svg>`;
+}
+
+function renderIndiceOperativo(){
+  const m = calcularMetricas(STATE.filtered);
+  const idx = calcularIndiceOperativo(m);
+  const nivel = idx.total >= 70 ? "Desempeño sólido" : (idx.total >= 40 ? "Desempeño con oportunidades" : "Desempeño crítico");
+
+  document.getElementById('gaugeCard').innerHTML = `
+    <div class="gauge-wrap">
+      ${dibujarGauge(idx.total)}
+      <div class="gauge-score num">${idx.total}<span style="font-size:16px;color:var(--text-tertiary);">/100</span></div>
+      <div class="gauge-caption">${nivel}</div>
+      <div class="gauge-legend">
+        <span><span class="dot red"></span> 0–40</span>
+        <span><span class="dot yellow"></span> 40–70</span>
+        <span><span class="dot green"></span> 70–100</span>
+      </div>
+    </div>`;
+
+  const partes = [
+    {n:"Cumplimiento", v:idx.partes.cumplimiento, peso:"30%"},
+    {n:"Efectividad", v:idx.partes.efectividad, peso:"25%"},
+    {n:"Tiempo de entrega", v:idx.partes.tiempo, peso:"20%"},
+    {n:"Control de novedades", v:idx.partes.novedades, peso:"15%"},
+    {n:"Ticket promedio", v:idx.partes.ticket, peso:"10%"}
+  ];
+  document.getElementById('idxBreakdown').innerHTML = partes.map(p=>`
+    <div style="margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;">
+        <span style="font-weight:600;">${p.n} <span style="color:var(--text-tertiary); font-weight:500;">· peso ${p.peso}</span></span>
+        <span class="num" style="font-weight:700;">${p.v}/100</span>
+      </div>
+      <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${p.v}%;"></div></div>
+    </div>`).join('');
+}
+
+/* ---------------------------------------------------------------
+   11. HELPER — Crear / actualizar gráficos Chart.js
+   --------------------------------------------------------------- */
+function estiloEjes(){
+  const cssText = getComputedStyle(document.documentElement);
+  return {
+    grid: cssText.getPropertyValue('--border').trim(),
+    text: cssText.getPropertyValue('--text-secondary').trim(),
+    accent: cssText.getPropertyValue('--accent').trim(),
+    accentStrong: cssText.getPropertyValue('--accent-strong').trim(),
+    success: cssText.getPropertyValue('--success').trim(),
+    warning: cssText.getPropertyValue('--warning').trim(),
+    danger: cssText.getPropertyValue('--danger').trim()
+  };
+}
+
+function crearOActualizarChart(id, config){
+  const ctx = document.getElementById(id);
+  if(!ctx) return;
+  if(typeof Chart === 'undefined'){
+    const contenedor = ctx.closest('.chart-box');
+    if(contenedor) contenedor.innerHTML = '<div class="empty-note">⚠ La librería de gráficos (Chart.js) no se pudo cargar desde el CDN.</div>';
+    return;
+  }
+  if(STATE.charts[id]) STATE.charts[id].destroy();
+  STATE.charts[id] = new Chart(ctx, config);
+}
+
+function opcionesBaseChart(colores, extra={}){
+  return Object.assign({
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ labels:{ color: colores.text, font:{family:"Inter", size:11} } } },
+    scales:{
+      x:{ grid:{color:colores.grid, drawBorder:false}, ticks:{color:colores.text, font:{size:10}} },
+      y:{ grid:{color:colores.grid, drawBorder:false}, ticks:{color:colores.text, font:{size:10}} }
+    }
+  }, extra);
+}
+
+/* ---------------------------------------------------------------
+   12. RENDER — MÓDULO 3: COMPORTAMIENTO OPERATIVO
+   --------------------------------------------------------------- */
+function renderComportamiento(){
+  const colores = estiloEjes();
+  const filas = STATE.filtered;
+
+  const porDia = new Map();
+  filas.forEach(f=>{ if(f.fecha){ const k = toInputDate(f.fecha); porDia.set(k, (porDia.get(k)||0)+1); } });
+  const diasOrdenados = [...porDia.keys()].sort();
+  crearOActualizarChart('chartPorDia', {
+    type:'bar',
+    data:{ labels:diasOrdenados.map(d=>d.slice(5)), datasets:[{ label:'Servicios', data:diasOrdenados.map(d=>porDia.get(d)), backgroundColor:colores.accent, borderRadius:4 }] },
+    options: opcionesBaseChart(colores, {plugins:{legend:{display:false}}})
+  });
+
+  const porMes = new Map();
+  filas.forEach(f=>{ if(f.fecha){ const k = `${f.fecha.getFullYear()}-${String(f.fecha.getMonth()+1).padStart(2,'0')}`; porMes.set(k, (porMes.get(k)||0)+1); } });
+  const mesesOrdenados = [...porMes.keys()].sort();
+  crearOActualizarChart('chartPorMes', {
+    type:'bar',
+    data:{ labels:mesesOrdenados, datasets:[{ label:'Servicios', data:mesesOrdenados.map(m=>porMes.get(m)), backgroundColor:colores.accentStrong, borderRadius:4 }] },
+    options: opcionesBaseChart(colores, {plugins:{legend:{display:false}}})
+  });
+
+  // Comparativo mensual: mes actual vs mes anterior equivalente en cumplimiento y volumen
+  crearOActualizarChart('chartComparativo', {
+    type:'bar',
+    data:{ labels:mesesOrdenados, datasets:[
+      { label:'Servicios', data:mesesOrdenados.map(m=>porMes.get(m)), backgroundColor:colores.accent, borderRadius:4, yAxisID:'y' },
+      { label:'Cumplimiento %', data:mesesOrdenados.map(m=>{
+          const subset = filas.filter(f=>f.fecha && `${f.fecha.getFullYear()}-${String(f.fecha.getMonth()+1).padStart(2,'0')}`===m);
+          const met = calcularMetricas(subset); return met.cumplimiento ? Math.round(met.cumplimiento) : 0;
+        }), type:'line', borderColor:colores.success, backgroundColor:colores.success, yAxisID:'y1', tension:.35 }
+    ]},
+    options: opcionesBaseChart(colores, { scales:{
+      x:{grid:{color:colores.grid}, ticks:{color:colores.text}},
+      y:{position:'left', grid:{color:colores.grid}, ticks:{color:colores.text}},
+      y1:{position:'right', grid:{display:false}, ticks:{color:colores.text}, min:0, max:100}
+    }})
+  });
+
+  // Tendencia: media móvil de 7 días sobre volumen diario
+  const ventana = 7;
+  const tendenciaValores = diasOrdenados.map((d,i)=>{
+    const desde = Math.max(0, i-ventana+1);
+    const slice = diasOrdenados.slice(desde, i+1).map(x=>porDia.get(x));
+    return slice.reduce((a,b)=>a+b,0)/slice.length;
+  });
+  crearOActualizarChart('chartTendencia', {
+    type:'line',
+    data:{ labels:diasOrdenados.map(d=>d.slice(5)), datasets:[{ label:'Media móvil 7 días', data:tendenciaValores, borderColor:colores.accent, backgroundColor:'transparent', tension:.4, pointRadius:0, borderWidth:2.5 }] },
+    options: opcionesBaseChart(colores, {plugins:{legend:{display:false}}})
+  });
+}
+
+/* ---------------------------------------------------------------
+   13. RENDER — MÓDULO 4: CUMPLIMIENTO (SEMÁFORO)
+   --------------------------------------------------------------- */
+function tablaSemaforoHTML(agregado, etiquetaCol){
+  const ordenado = agregado.filter(a=>a.total>0).sort((a,b)=>b.total-a.total);
+  if(!ordenado.length) return `<div class="empty-note">Sin datos para los filtros seleccionados.</div>`;
+  return `<table class="data-table"><thead><tr><th>${etiquetaCol}</th><th>Servicios</th><th>Cumplimiento</th><th></th></tr></thead><tbody>
+    ${ordenado.map(a=>{
+      const nivel = iconoSemaforo(a.cumplimiento, CONFIG.UMBRAL_CUMPLIMIENTO, 85);
+      return `<tr><td>${a.nombre}</td><td class="num">${formatoNumero(a.total)}</td><td class="num">${formatoPct(a.cumplimiento)}</td><td><span class="dot ${nivel}"></span></td></tr>`;
+    }).join('')}
+  </tbody></table>`;
+}
+
+function renderCumplimiento(){
+  document.getElementById('tablaCumpCiudad').innerHTML = tablaSemaforoHTML(agregarPor(STATE.filtered,'ciudad'), 'Ciudad');
+  document.getElementById('tablaCumpPunto').innerHTML = tablaSemaforoHTML(agregarPor(STATE.filtered,'punto'), 'Punto');
+  document.getElementById('tablaCumpResponsable').innerHTML = tablaSemaforoHTML(agregarPor(STATE.filtered,'responsable'), 'Responsable');
+}
+
+/* ---------------------------------------------------------------
+   14. RENDER — MÓDULO 5: PRODUCTIVIDAD POR FRANJA
+   --------------------------------------------------------------- */
+function renderFranja(){
+  const agregado = agregarPor(STATE.filtered, 'franja').filter(a=>a.total>0);
+  const totalGeneral = agregado.reduce((s,a)=>s+a.total,0);
+  // Orden cronológico por hora (no por volumen de servicios)
+  const horaAMinutos = (etiqueta)=>{
+    const m = String(etiqueta).match(/(\d{1,2})\s*:\s*(\d{2})/);
+    return m ? (parseInt(m[1],10)*60 + parseInt(m[2],10)) : Number.MAX_SAFE_INTEGER;
+  };
+  agregado.sort((a,b)=> horaAMinutos(a.nombre) - horaAMinutos(b.nombre));
+  if(!agregado.length){ document.getElementById('tablaFranja').innerHTML = `<div class="empty-note">Sin datos.</div>`; return; }
+  document.getElementById('tablaFranja').innerHTML = `
+    <table class="data-table"><thead><tr>
+      <th>Franja</th><th>Servicios</th><th>%</th><th>Tiempo prom.</th><th>Cumplimiento</th><th>Efectividad</th><th>Novedades</th>
+    </tr></thead><tbody>
+      ${agregado.map(a=>`
+        <tr>
+          <td>${a.nombre}</td>
+          <td class="num">${formatoNumero(a.total)}</td>
+          <td class="num">${formatoPct(totalGeneral? a.total/totalGeneral*100:0)}</td>
+          <td class="num">${a.tiempoProm!==null? formatoNumero(a.tiempoProm,0)+' min':'N/D'}</td>
+          <td class="num">${formatoPct(a.cumplimiento)}</td>
+          <td class="num">${formatoPct(a.efectividad)}</td>
+          <td class="num">${formatoNumero(a.novedadesCount)}</td>
+        </tr>`).join('')}
+    </tbody></table>`;
+}
+
+/* ---------------------------------------------------------------
+   15. RENDER — MÓDULO 6: NOVEDADES
+   --------------------------------------------------------------- */
+function listaRankingHTML(items, maxItems=8, formato='numero'){
+  const top = items.slice(0, maxItems);
+  const max = Math.max(...top.map(i=>i.valor), 1);
+  if(!top.length) return `<div class="empty-note">Sin datos.</div>`;
+  return top.map((i,idx)=>`
+    <div class="rank-row">
+      <div class="rank-pos">${String(idx+1).padStart(2,'0')}</div>
+      <div>
+        <div class="rank-name" title="${i.nombre}">${i.nombre}</div>
+        <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${(i.valor/max*100)}%;"></div></div>
+      </div>
+      <div class="rank-value">${formato==='moneda'?formatoMoneda(i.valor):(formato==='pct'?formatoPct(i.valor):formatoNumero(i.valor))}</div>
+    </div>`).join('');
+}
+
+function renderNovedades(){
+  const filas = STATE.filtered.filter(f=>esNovedadValida(f.novedad));
+  const porNovedad = agregarPor(filas, 'novedad').sort((a,b)=>b.total-a.total)
+    .map(a=>({nombre:a.nombre, valor:a.total}));
+  document.getElementById('rankNovedades').innerHTML = listaRankingHTML(porNovedad);
+  document.getElementById('rankNovedades2') && (document.getElementById('rankNovedades2').innerHTML = listaRankingHTML(porNovedad));
+
+  const porResp = agregarPor(filas, 'responsable').sort((a,b)=>b.total-a.total)
+    .map(a=>({nombre:a.nombre, valor:a.total}));
+  document.getElementById('rankRespNovedades').innerHTML = listaRankingHTML(porResp);
+
+  const colores = estiloEjes();
+  const porCiudad = agregarPor(filas, 'ciudad').sort((a,b)=>b.total-a.total);
+  crearOActualizarChart('chartNovCiudad', {
+    type:'doughnut',
+    data:{ labels:porCiudad.map(c=>c.nombre), datasets:[{ data:porCiudad.map(c=>c.total), backgroundColor:[colores.accent,colores.accentStrong,colores.success,colores.warning,colores.danger,'#8B5CF6','#EC4899','#14B8A6'] }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{ color:colores.text, boxWidth:10, font:{size:10} } } } }
+  });
+
+  const porPunto = agregarPor(filas, 'punto').sort((a,b)=>b.total-a.total).slice(0,10);
+  crearOActualizarChart('chartNovPunto', {
+    type:'bar',
+    data:{ labels:porPunto.map(p=>p.nombre), datasets:[{ label:'Novedades', data:porPunto.map(p=>p.total), backgroundColor:colores.danger, borderRadius:4 }] },
+    options: opcionesBaseChart(colores, {indexAxis:'y', plugins:{legend:{display:false}}})
+  });
+}
+
+/* ---------------------------------------------------------------
+   16B. RENDER — MÓDULO 7: SEGMENTACIÓN POR TIPO DE NEGOCIO
+   --------------------------------------------------------------- */
+function renderTipoNegocio(){
+  const filas = STATE.filtered.filter(f=>f.tipoNegocio && f.tipoNegocio.trim() !== "");
+  const agregado = agregarPor(filas, 'tipoNegocio').sort((a,b)=>b.total-a.total);
+  if(!agregado.length){
+    document.getElementById('tablaTipoNegocio').innerHTML = `<div class="empty-note">La columna "tipo_negocio" no se encontró en la hoja DATA o no tiene datos para este filtro.</div>`;
+    return;
+  }
+  const totalGeneral = agregado.reduce((s,a)=>s+a.total,0);
+  document.getElementById('tablaTipoNegocio').innerHTML = `
+    <table class="data-table"><thead><tr>
+      <th>Tipo de negocio</th><th>Servicios</th><th>%</th><th>Tiempo de gestión promedio</th><th>Cumplimiento</th>
+    </tr></thead><tbody>
+      ${agregado.map(a=>`
+        <tr>
+          <td>${a.nombre}</td>
+          <td class="num">${formatoNumero(a.total)}</td>
+          <td class="num">${formatoPct(totalGeneral? a.total/totalGeneral*100:0)}</td>
+          <td class="num">${a.tiempoProm!==null? formatoNumero(a.tiempoProm,0)+' min':'N/D'}</td>
+          <td class="num">${formatoPct(a.cumplimiento)}</td>
+        </tr>`).join('')}
+    </tbody></table>`;
+}
+
+/* ---------------------------------------------------------------
+   16C. RENDER — MÓDULO 8: PEDIDOS SIN CUMPLIMIENTO DE ENTREGA
+   (columnas reales "Novedad Cumplimiento" y "Responsable" -causa raíz-)
+   --------------------------------------------------------------- */
+function renderPedidosSinCumplimiento(){
+  const filas = STATE.filtered.filter(f=>f.cumple === false);
+  // "SIN SEGUIMIENTO DIARIO" es un marcador de "no se hizo seguimiento", no una causa
+  // raíz real ni un responsable identificable: se excluye del desglose por pedido del usuario.
+  const esCausaValida = (valor)=>{
+    if(!esNovedadValida(valor)) return false;
+    return normalizarTexto(valor) !== "sin seguimiento diario";
+  };
+  const conMotivo = filas.filter(f=>esCausaValida(f.motivoIncumplimiento));
+  const dias = new Set(filas.map(f=>f.fecha ? toInputDate(f.fecha) : null).filter(Boolean));
+  const promedioDia = dias.size ? filas.length/dias.size : null;
+
+  const tarjetas = [
+    { label:"Pedidos sin cumplimiento", valor:formatoNumero(filas.length), icon:"🔴", color:"danger" },
+    { label:"Promedio por día", valor: promedioDia!==null? formatoNumero(promedioDia,1) : "N/D", icon:"📅", color:"warning" },
+    { label:"% sobre el total filtrado", valor: STATE.filtered.length? formatoPct(filas.length/STATE.filtered.length*100) : "N/D", icon:"📉", color:"warning" }
+  ];
+  document.getElementById('kpiSinCumplimiento').innerHTML = tarjetas.map(t=>`
+    <div class="card kpi-card hoverable">
+      <div class="kpi-top"><span class="kpi-label">${t.label}</span><div class="kpi-icon" style="background:var(--${t.color}-bg); color:var(--${t.color});">${t.icon}</div></div>
+      <div class="kpi-value">${t.valor}</div>
+    </div>`).join('');
+
+  const colores = estiloEjes();
+  const porMotivo = new Map();
+  conMotivo.forEach(f=>{ const k = f.motivoIncumplimiento; porMotivo.set(k, (porMotivo.get(k)||0)+1); });
+  const motivosOrdenados = [...porMotivo.entries()].sort((a,b)=>b[1]-a[1]);
+  crearOActualizarChart('chartMotivoIncumplimiento', {
+    type:'bar',
+    data:{ labels:motivosOrdenados.map(m=>m[0]), datasets:[{ label:'Pedidos', data:motivosOrdenados.map(m=>m[1]), backgroundColor:colores.danger, borderRadius:4 }] },
+    options: opcionesBaseChart(colores, {indexAxis:'y', plugins:{legend:{display:false}}})
+  });
+
+  const conResp = filas.filter(f=>esCausaValida(f.responsableIncumplimiento));
+  const mapaResp = new Map();
+  conResp.forEach(f=>{ const k = f.responsableIncumplimiento; mapaResp.set(k, (mapaResp.get(k)||0)+1); });
+  const rankingResp = [...mapaResp.entries()].map(([nombre,valor])=>({nombre, valor})).sort((a,b)=>b.valor-a.valor);
+  document.getElementById('rankResponsableIncumplimiento').innerHTML = listaRankingHTML(rankingResp, 10);
+}
+function renderTicketPromedio(){
+  const f = leerFiltrosActuales();
+
+  // subsetTodos: respeta ciudad/punto pero conserva el punto administrativo
+  // (para poder mostrar su información aparte). subset: el conjunto "real"
+  // de puntos operativos, usado en todos los promedios y rankings.
+  let subsetTodos = STATE.promo;
+  if(f.ciudad) subsetTodos = subsetTodos.filter(p=>normalizarTexto(p.ciudad) === normalizarTexto(f.ciudad));
+  if(f.punto) subsetTodos = subsetTodos.filter(p=>normalizarTexto(p.punto) === normalizarTexto(f.punto));
+  const subset = subsetTodos.filter(p=>!esPuntoAdministrativo(p.punto));
+  // Igual que subset, pero además acotado al rango de fecha filtrado (para
+  // que el Ranking y la Tabla comparativa reflejen el mes/rango elegido y no
+  // un promedio de todo el histórico).
+  const subsetEnRango = subset.filter(p=>mesEnRango(p.anio, p.mes, f.fechaIni, f.fechaFin));
+
+  const nacional = calcularTicketPromedio(STATE.promo, {});
+  document.getElementById('ticketNacional').textContent = formatoMoneda(nacional);
+
+  const porMes = new Map();
+  subset.forEach(p=>{
+    if(p.anio && p.mes && p.ticket !== null){
+      const key = `${p.anio}-${String(p.mes).padStart(2,'0')}`;
+      if(!porMes.has(key)) porMes.set(key, []);
+      porMes.get(key).push(p.ticket);
+    }
+  });
+  const mesesOrdenados = [...porMes.keys()].sort();
+  const colores = estiloEjes();
+  crearOActualizarChart('chartTicketMensual', {
+    type:'line',
+    data:{ labels:mesesOrdenados, datasets:[{ label:'Ticket promedio', data:mesesOrdenados.map(m=>{
+      const arr = porMes.get(m); return arr.reduce((a,b)=>a+b,0)/arr.length;
+    }), borderColor:colores.accent, backgroundColor:'transparent', tension:.35, borderWidth:2.5 }] },
+    options: opcionesBaseChart(colores, {plugins:{legend:{display:false}}})
+  });
+
+  const porPunto = new Map();
+  subsetEnRango.forEach(p=>{
+    if(p.ticket !== null){
+      if(!porPunto.has(p.punto)) porPunto.set(p.punto, []);
+      porPunto.get(p.punto).push(p.ticket);
+    }
+  });
+  const rankingPuntos = [...porPunto.entries()].map(([nombre, arr])=>({nombre, valor: arr.reduce((a,b)=>a+b,0)/arr.length}))
+    .sort((a,b)=>b.valor-a.valor);
+  document.getElementById('rankTicketPunto').innerHTML = listaRankingHTML(rankingPuntos, 10, 'moneda');
+
+  const filasTabla = [...porPunto.entries()].map(([punto, arr])=>{
+    const primero = subsetEnRango.find(p=>p.punto===punto);
+    return { punto, ciudad: primero? primero.ciudad : '', promedio: arr.reduce((a,b)=>a+b,0)/arr.length, registros: arr.length, administrativo:false };
+  }).sort((a,b)=>b.promedio-a.promedio);
+
+  // El punto administrativo se cuenta y se muestra, pero NUNCA entra al
+  // ranking ni al promedio: se agrega como fila final, marcada aparte.
+  const adminEnRango = subsetTodos.filter(p=>esPuntoAdministrativo(p.punto) && mesEnRango(p.anio, p.mes, f.fechaIni, f.fechaFin) && p.ticket !== null);
+  if(adminEnRango.length){
+    const promedioAdmin = adminEnRango.reduce((s,p)=>s+p.ticket,0)/adminEnRango.length;
+    filasTabla.push({ punto: adminEnRango[0].punto, ciudad: adminEnRango[0].ciudad, promedio: promedioAdmin, registros: adminEnRango.length, administrativo:true });
+  }
+
+  document.getElementById('tablaTicket').innerHTML = filasTabla.length ? `
+    <table class="data-table"><thead><tr><th>Punto</th><th>Ciudad</th><th>Ticket promedio</th><th>Registros</th><th></th></tr></thead><tbody>
+      ${filasTabla.map(r=>`<tr${r.administrativo?' style="opacity:.7;"':''}><td>${r.punto}</td><td>${r.ciudad}</td><td class="num">${formatoMoneda(r.promedio)}</td><td class="num">${formatoNumero(r.registros)}</td><td>${r.administrativo?'<span class="badge yellow">Administrativo · no promediado</span>':''}</td></tr>`).join('')}
+    </tbody></table>` : `<div class="empty-note">Sin datos de la hoja Promoción de Entradas.</div>`;
+
+  // Per Cápita: costo fijo del punto / total de servicios del año (columna Total general)
+  // Se excluye también el punto administrativo del cálculo de eficiencia, por la
+  // misma razón: su "costo por servicio" no es comparable (1 servicio/mes ficticio).
+  let resumen = STATE.promoResumen || [];
+  if(f.ciudad) resumen = resumen.filter(r=>normalizarTexto(r.ciudad) === normalizarTexto(f.ciudad));
+  if(f.punto) resumen = resumen.filter(r=>normalizarTexto(r.punto) === normalizarTexto(f.punto));
+  const conPerCapita = resumen.filter(r=>r.costoPorServicio !== null && !esPuntoAdministrativo(r.punto)).sort((a,b)=>a.costoPorServicio-b.costoPorServicio);
+  const adminResumen = resumen.filter(r=>esPuntoAdministrativo(r.punto));
+  document.getElementById('tablaPerCapita').innerHTML = (conPerCapita.length || adminResumen.length) ? `
+    <table class="data-table"><thead><tr><th>Punto</th><th>Ciudad</th><th>Clasificación</th><th>Mensajeros</th><th>Costo</th><th>Servicios (año)</th><th>Per Cápita</th><th></th></tr></thead><tbody>
+      ${conPerCapita.map(r=>`
+        <tr>
+          <td>${r.punto}</td><td>${r.ciudad}</td><td>${r.clasificacion||'N/D'}</td>
+          <td class="num">${r.mensajeros!==null?formatoNumero(r.mensajeros,1):'N/D'}</td>
+          <td class="num">${formatoMoneda(r.costo)}</td>
+          <td class="num">${formatoNumero(r.totalGeneral)}</td>
+          <td class="num">${formatoMoneda(r.costoPorServicio)}</td>
+          <td></td>
+        </tr>`).join('')}
+      ${adminResumen.map(r=>`
+        <tr style="opacity:.7;">
+          <td>${r.punto}</td><td>${r.ciudad}</td><td>${r.clasificacion||'N/D'}</td>
+          <td class="num">${r.mensajeros!==null?formatoNumero(r.mensajeros,1):'N/D'}</td>
+          <td class="num">${formatoMoneda(r.costo)}</td>
+          <td class="num">${formatoNumero(r.totalGeneral)}</td>
+          <td class="num">${formatoMoneda(r.costoPorServicio)}</td>
+          <td><span class="badge yellow">Administrativo · no promediado</span></td>
+        </tr>`).join('')}
+    </tbody></table>` : `<div class="empty-note">Sin datos de Mensajeros/Costo en la hoja Promoción de Entradas.</div>`;
+}
+
+/* ---------------------------------------------------------------
+   17. RENDER — MÓDULO 10: RANKING NACIONAL
+   --------------------------------------------------------------- */
+function renderRankingNacional(){
+  const filas = STATE.filtered;
+
+  const ciudades = agregarPor(filas,'ciudad').sort((a,b)=>b.total-a.total).map(a=>({nombre:a.nombre, valor:a.total}));
+  document.getElementById('rankCiudades').innerHTML = listaRankingHTML(ciudades, 8);
+
+  const puntos = agregarPor(filas,'punto').sort((a,b)=>b.total-a.total).map(a=>({nombre:a.nombre, valor:a.total}));
+  document.getElementById('rankPuntos').innerHTML = listaRankingHTML(puntos, 8);
+
+  const responsables = agregarPor(filas,'responsable').sort((a,b)=>b.total-a.total).map(a=>({nombre:a.nombre, valor:a.total}));
+  document.getElementById('rankResponsables').innerHTML = listaRankingHTML(responsables, 8);
+
+  const conTiempo = agregarPor(filas.filter(f=>f.tiempo!==null),'punto').filter(a=>a.tiempoProm!==null)
+    .sort((a,b)=>a.tiempoProm-b.tiempoProm).map(a=>({nombre:a.nombre, valor:Math.round(a.tiempoProm)}));
+  document.getElementById('rankTiempos').innerHTML = listaRankingHTML(conTiempo, 8);
+
+  const conCumplimiento = agregarPor(filas,'punto').filter(a=>a.cumplimiento!==null && a.total>=3)
+    .sort((a,b)=>b.cumplimiento-a.cumplimiento).map(a=>({nombre:a.nombre, valor:Math.round(a.cumplimiento)}));
+  document.getElementById('rankCumplimiento').innerHTML = listaRankingHTML(conCumplimiento, 8, 'pct');
+}
+
+/* ---------------------------------------------------------------
+   18. RENDER — MÓDULO 11: CENTRO DE ALERTAS
+   --------------------------------------------------------------- */
+function renderAlertas(){
+  const filas = STATE.filtered;
+  const m = calcularMetricas(filas);
+  const porCiudad = agregarPor(filas,'ciudad').filter(a=>a.total>0);
+  const porPunto = agregarPor(filas,'punto').filter(a=>a.total>0);
+  const porResp = agregarPor(filas,'responsable').filter(a=>a.total>0);
+  const porFranja = agregarPor(filas,'franja').filter(a=>a.total>0);
+
+  const alertas = [];
+
+  if(m.cumplimiento !== null && m.cumplimiento < CONFIG.UMBRAL_CUMPLIMIENTO){
+    alertas.push({icon:'🔴', texto:`El cumplimiento general es de <b>${formatoPct(m.cumplimiento)}</b>, por debajo del umbral mínimo de ${CONFIG.UMBRAL_CUMPLIMIENTO}%.`});
+  }
+  const ciudadPeorTiempo = porCiudad.filter(c=>c.tiempoProm!==null).sort((a,b)=>b.tiempoProm-a.tiempoProm)[0];
+  if(ciudadPeorTiempo){
+    alertas.push({icon:'🟠', texto:`<b>${ciudadPeorTiempo.nombre}</b> presenta el mayor tiempo promedio de entrega: ${formatoNumero(ciudadPeorTiempo.tiempoProm,0)} min.`});
+  }
+  const puntoMasNovedades = porPunto.sort((a,b)=>b.novedadesCount-a.novedadesCount)[0];
+  if(puntoMasNovedades && puntoMasNovedades.novedadesCount>0){
+    alertas.push({icon:'🟠', texto:`El punto <b>${puntoMasNovedades.nombre}</b> concentra la mayor cantidad de novedades: ${formatoNumero(puntoMasNovedades.novedadesCount)}.`});
+  }
+  const respMasIncidencias = porResp.sort((a,b)=>b.novedadesCount-a.novedadesCount)[0];
+  if(respMasIncidencias && respMasIncidencias.novedadesCount>0){
+    alertas.push({icon:'🟡', texto:`<b>${respMasIncidencias.nombre}</b> es el responsable con mayor cantidad de incidencias registradas: ${formatoNumero(respMasIncidencias.novedadesCount)}.`});
+  }
+  const franjaPeorDesempeno = porFranja.filter(f=>f.cumplimiento!==null).sort((a,b)=>a.cumplimiento-b.cumplimiento)[0];
+  if(franjaPeorDesempeno){
+    alertas.push({icon:'🟡', texto:`La franja <b>${franjaPeorDesempeno.nombre}</b> presenta el desempeño más bajo, con un cumplimiento de ${formatoPct(franjaPeorDesempeno.cumplimiento)}.`});
+  }
+  const ciudadMejorCumplimiento = porCiudad.filter(c=>c.cumplimiento!==null && c.total>=3).sort((a,b)=>b.cumplimiento-a.cumplimiento)[0];
+  if(ciudadMejorCumplimiento){
+    alertas.push({icon:'🟢', texto:`<b>${ciudadMejorCumplimiento.nombre}</b> muestra el mejor cumplimiento: ${formatoPct(ciudadMejorCumplimiento.cumplimiento)}.`});
+  }
+  const puntoMejorDesempeno = porPunto.filter(p=>p.cumplimiento!==null && p.total>=3).sort((a,b)=>b.cumplimiento-a.cumplimiento)[0];
+  if(puntoMejorDesempeno){
+    alertas.push({icon:'🟢', texto:`El punto con mejor desempeño es <b>${puntoMejorDesempeno.nombre}</b>, con ${formatoPct(puntoMejorDesempeno.cumplimiento)} de cumplimiento.`});
+  }
+
+  document.getElementById('panelAlertas').innerHTML = alertas.length ? alertas.map(a=>`
+    <div class="alert-item"><span class="a-icon">${a.icon}</span><span class="a-text">${a.texto}</span></div>`).join('')
+    : `<div class="empty-note">No se generaron alertas para los filtros seleccionados.</div>`;
+}
+
+/* ---------------------------------------------------------------
+   19. RENDER — MÓDULO 12: INSIGHTS DEL DÍA
+   --------------------------------------------------------------- */
+function renderInsights(){
+  const filas = STATE.filtered;
+  const m = calcularMetricas(filas);
+  const mAnt = calcularMetricas(STATE.previousPeriod);
+  const insights = [];
+
+  const varCumplimiento = calcularVariacion(m.cumplimiento, mAnt.cumplimiento);
+  if(varCumplimiento !== null){
+    insights.push(`El cumplimiento ${varCumplimiento>=0?'aumentó':'disminuyó'} ${formatoPct(Math.abs(varCumplimiento))} frente al período anterior.`);
+  }
+  const porCiudad = agregarPor(filas,'ciudad').filter(c=>c.total>=3 && c.cumplimiento!==null).sort((a,b)=>b.cumplimiento-a.cumplimiento);
+  if(porCiudad.length){
+    insights.push(`${porCiudad[0].nombre} presenta el mejor desempeño, con ${formatoPct(porCiudad[0].cumplimiento)} de cumplimiento.`);
+  }
+  const porFranja = agregarPor(filas,'franja').filter(f=>f.total>0).sort((a,b)=>b.total-a.total);
+  if(porFranja.length){
+    insights.push(`La franja ${porFranja[0].nombre} concentra la mayor cantidad de servicios (${formatoNumero(porFranja[0].total)}).`);
+  }
+  const f = leerFiltrosActuales();
+  const porPuntoTicket = new Map();
+  STATE.promo.forEach(p=>{ if(p.ticket!==null){ if(!porPuntoTicket.has(p.punto)) porPuntoTicket.set(p.punto, []); porPuntoTicket.get(p.punto).push(p.ticket); } });
+  const rankingTicket = [...porPuntoTicket.entries()].map(([nombre,arr])=>({nombre, valor:arr.reduce((a,b)=>a+b,0)/arr.length})).sort((a,b)=>b.valor-a.valor);
+  if(rankingTicket.length){
+    insights.push(`El punto con mayor ticket promedio es ${rankingTicket[0].nombre}, con ${formatoMoneda(rankingTicket[0].valor)}.`);
+  }
+  const varNovedades = calcularVariacion(m.novedadesCount, mAnt.novedadesCount);
+  if(varNovedades !== null){
+    insights.push(`Las novedades ${varNovedades<=0?'disminuyeron':'aumentaron'} ${formatoPct(Math.abs(varNovedades))} frente al período anterior.`);
+  }
+  const varTiempo = calcularVariacion(m.tiempoProm, mAnt.tiempoProm);
+  if(varTiempo !== null){
+    insights.push(`El tiempo promedio de entrega ${varTiempo<=0?'mejoró':'aumentó'} ${formatoPct(Math.abs(varTiempo))} respecto al período anterior.`);
+  }
+
+  document.getElementById('panelInsights').innerHTML = insights.length ? insights.map(txt=>`
+    <div class="insight-item">💡&nbsp; ${txt}</div>`).join('')
+    : `<div class="empty-note">No hay suficiente información para generar insights con los filtros actuales.</div>`;
+}
+
+/* ---------------------------------------------------------------
+   20. MÓDULO 11 — MAPA NACIONAL DE SERVICIOS
+   --------------------------------------------------------------- */
+function inicializarMapa(){
+  STATE.map = L.map('mapContainer', { zoomControl:true, preferCanvas:true }).setView([4.6, -74.1], 6);
+  STATE.tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'&copy; OpenStreetMap', maxZoom:18
+  }).addTo(STATE.map);
+  aplicarFiltroTilesSegunTema();
+
+  // El contenedor del mapa puede no tener aún un tamaño real (ancho/alto en
+  // píxeles) en el instante exacto en que se crea el mapa, ya que el navegador
+  // todavía está calculando el layout de la página. Si esto ocurre, el plugin
+  // de heatmap intenta medir un canvas de 0px y falla con IndexSizeError,
+  // dejando el mapa en un estado roto (y sus controles sin responder). Se
+  // fuerza un recálculo de tamaño de inmediato y otro poco después, como red
+  // de seguridad adicional para layouts que tardan más en asentarse.
+  STATE.map.invalidateSize();
+  setTimeout(()=>{ if(STATE.map) STATE.map.invalidateSize(); }, 300);
+  window.addEventListener('resize', ()=>{ if(STATE.map) STATE.map.invalidateSize(); });
+
+  STATE.layers.cluster = L.markerClusterGroup({ disableClusteringAtZoom: 16, chunkedLoading:true });
+  STATE.map.on('moveend', ()=> recalcularCobertura());
+
+  STATE.map.on('click', (e)=>{
+    if(STATE.mapMode !== 'markers') return;
+    establecerCentroCobertura(e.latlng.lat, e.latlng.lng);
+  });
+
+  document.getElementById('mapModeToggle').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-mode]');
+    if(!btn) return;
+    STATE.mapMode = btn.dataset.mode;
+    document.querySelectorAll('#mapModeToggle button').forEach(b=>b.classList.toggle('active', b===btn));
+    renderMapa();
+  });
+
+  document.getElementById('radioToggle').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-radio]');
+    if(!btn) return;
+    STATE.coverageRadiusKm = parseFloat(btn.dataset.radio);
+    document.querySelectorAll('#radioToggle button').forEach(b=>b.classList.toggle('active', b===btn));
+    recalcularCobertura();
+  });
+
+  document.getElementById('mapCitySelect').addEventListener('change', (e)=>{
+    const ciudad = e.target.value;
+    if(!ciudad) return;
+    const puntos = STATE.filtered.filter(f=>f.ciudad===ciudad && f.lat!==null && f.lon!==null);
+    if(!puntos.length) return;
+    const centLat = puntos.reduce((s,p)=>s+p.lat,0)/puntos.length;
+    const centLon = puntos.reduce((s,p)=>s+p.lon,0)/puntos.length;
+    STATE.map.setView([centLat, centLon], 12);
+    establecerCentroCobertura(centLat, centLon);
+  });
+}
+
+function aplicarFiltroTilesSegunTema(){
+  const tileEl = document.querySelector('#mapContainer .leaflet-tile-pane');
+  if(tileEl) tileEl.style.filter = getComputedStyle(document.documentElement).getPropertyValue('--map-tile-filter');
+}
+
+function establecerCentroCobertura(lat, lon){
+  STATE.coverageCenter = {lat, lon};
+  if(STATE.layers.coverageCircle){ STATE.map.removeLayer(STATE.layers.coverageCircle); }
+  if(STATE.layers.coverageCenterMarker){ STATE.map.removeLayer(STATE.layers.coverageCenterMarker); }
+  STATE.layers.coverageCenterMarker = L.circleMarker([lat,lon], {radius:6, color:'#fff', weight:2, fillColor:'#D13438', fillOpacity:1}).addTo(STATE.map);
+  STATE.layers.coverageCircle = L.circle([lat,lon], { radius: STATE.coverageRadiusKm*1000, color:'#0F6CBD', weight:2, fillColor:'#0F6CBD', fillOpacity:0.12 }).addTo(STATE.map);
+  recalcularCobertura();
+}
+
+function recalcularCobertura(){
+  if(!STATE.coverageCenter){ return; }
+  const {lat, lon} = STATE.coverageCenter;
+  if(STATE.layers.coverageCircle) STATE.layers.coverageCircle.setRadius(STATE.coverageRadiusKm*1000);
+
+  const dentro = STATE.filtered.filter(f=>{
+    if(f.lat===null || f.lon===null) return false;
+    return haversineKm(lat, lon, f.lat, f.lon) <= STATE.coverageRadiusKm;
+  });
+  const m = calcularMetricas(dentro);
+  const ciudadesEnRadio = new Set(dentro.map(d=>normalizarTexto(d.ciudad)));
+  let ticketProm = null;
+  if(ciudadesEnRadio.size){
+    const relevantes = STATE.promo.filter(p=>ciudadesEnRadio.has(normalizarTexto(p.ciudad)));
+    ticketProm = calcularTicketPromedio(relevantes, {});
+  }
+
+  document.getElementById('coverageStats').innerHTML = `
+    <div class="coverage-metric"><span>Servicios en el radio</span><b>${formatoNumero(m.total)}</b></div>
+    <div class="coverage-metric"><span>Tiempo promedio</span><b>${m.tiempoProm!==null?formatoNumero(m.tiempoProm,0)+' min':'N/D'}</b></div>
+    <div class="coverage-metric"><span>Cumplimiento</span><b>${formatoPct(m.cumplimiento)}</b></div>
+    <div class="coverage-metric"><span>Efectividad</span><b>${formatoPct(m.efectividad)}</b></div>
+    <div class="coverage-metric"><span>Novedades</span><b>${formatoNumero(m.novedadesCount)}</b></div>
+    <div class="coverage-metric"><span>Ticket promedio</span><b>${ticketProm!==null?formatoMoneda(ticketProm):'N/D'}</b></div>
+  `;
+}
+
+function crearPopupHTML(f){
+  return `
+    <div class="popup-title">${f.guia || 'Sin guía'}</div>
+    <div class="popup-row"><span>Fecha</span><b>${f.fechaTexto || 'N/D'}</b></div>
+    <div class="popup-row"><span>Ciudad</span><b>${f.ciudad || 'N/D'}</b></div>
+    <div class="popup-row"><span>Punto</span><b>${f.punto || 'N/D'}</b></div>
+    <div class="popup-row"><span>Responsable</span><b>${f.responsable || 'N/D'}</b></div>
+    <div class="popup-row"><span>Estado</span><b>${f.estado || 'N/D'}</b></div>
+    <div class="popup-row"><span>Cumplimiento</span><b>${f.cumple===true?'Cumple':(f.cumple===false?'No cumple':'N/D')}</b></div>
+    <div class="popup-row"><span>Tiempo</span><b>${f.tiempo!==null? f.tiempo+' min':'N/D'}</b></div>
+    <div class="popup-row"><span>Novedad</span><b>${f.novedad || 'Ninguna'}</b></div>`;
+}
+
+function renderMapa(){
+  if(typeof L === 'undefined'){
+    const mapCard = document.getElementById('mapContainer');
+    if(mapCard) mapCard.innerHTML = '<div class="empty-note">⚠ La librería de mapas (Leaflet) no se pudo cargar desde el CDN.</div>';
+    return;
+  }
+  if(!STATE.map) inicializarMapa();
+  // Se fuerza el recálculo de tamaño en cada render (operación barata) para
+  // evitar que cualquier capa (heatmap, cluster) mida el contenedor en 0px
+  // si el layout de la página cambió entre un render y otro.
+  STATE.map.invalidateSize();
+  const conCoordenadas = STATE.filtered.filter(f => typeof f.lat === 'number' && typeof f.lon === 'number' && !isNaN(f.lat) && !isNaN(f.lon) && Math.abs(f.lat)<=90 && Math.abs(f.lon)<=180);
+
+  if(STATE.layers.heat){ STATE.map.removeLayer(STATE.layers.heat); STATE.layers.heat = null; }
+  if(STATE.map.hasLayer(STATE.layers.cluster)) STATE.map.removeLayer(STATE.layers.cluster);
+  STATE.layers.cluster.clearLayers();
+
+  if(STATE.mapMode === 'heat'){
+    const puntosHeat = conCoordenadas.map(f=>[f.lat, f.lon, 0.55]);
+    const opcionesHeat = {
+      radius:22, blur:18, maxZoom:12,
+      gradient:{0.2:'#0F6CBD', 0.4:'#0F9D58', 0.65:'#F2A600', 1.0:'#D13438'}
+    };
+    const contenedor = document.getElementById('mapContainer');
+    const tieneAncho = contenedor && contenedor.clientWidth > 0 && contenedor.clientHeight > 0;
+    if(!tieneAncho){
+      // El contenedor todavía no tiene un tamaño real: se reintenta en el
+      // siguiente frame en vez de dejar que el plugin falle con IndexSizeError.
+      requestAnimationFrame(()=>{ if(STATE.mapMode === 'heat'){ STATE.map.invalidateSize(); renderMapa(); } });
+      return;
+    }
+    try{
+      STATE.layers.heat = L.heatLayer(puntosHeat, opcionesHeat).addTo(STATE.map);
+    }catch(err){
+      console.warn("No se pudo dibujar el heatmap, reintentando tras recalcular tamaño:", err.message || err);
+      STATE.map.invalidateSize();
+      setTimeout(()=>{ if(STATE.mapMode === 'heat') renderMapa(); }, 200);
+      return;
+    }
+  } else {
+    conCoordenadas.forEach(f=>{
+      const marker = L.circleMarker([f.lat, f.lon], {
+        radius:6, weight:1, color:'#fff',
+        fillColor: f.cumple===false ? '#D13438' : (f.cumple===true ? '#0F9D58' : '#0F6CBD'),
+        fillOpacity:0.9
+      });
+      marker.bindPopup(crearPopupHTML(f));
+      marker.on('click', ()=> establecerCentroCobertura(f.lat, f.lon));
+      STATE.layers.cluster.addLayer(marker);
+    });
+    STATE.map.addLayer(STATE.layers.cluster);
+  }
+
+  const ciudades = new Set(conCoordenadas.map(f=>f.ciudad).filter(Boolean));
+  document.getElementById('mapStatsBar').innerHTML = `
+    <div class="map-stat"><b class="num">${formatoNumero(conCoordenadas.length)}</b>Servicios visualizados</div>
+    <div class="map-stat"><b class="num">${formatoNumero(conCoordenadas.length)}</b>Puntos geolocalizados</div>
+    <div class="map-stat"><b class="num">${formatoNumero(ciudades.size)}</b>Ciudades representadas</div>
+    <div class="map-stat"><b class="num">${STATE.filtered.length ? formatoPct(conCoordenadas.length/STATE.filtered.length*100,0) : '0%'}</b>Cobertura de geolocalización</div>
+  `;
+  recalcularCobertura();
+}
+
+/* ---------------------------------------------------------------
+   21. MÓDULO 12 — TABLA OPERATIVA
+   --------------------------------------------------------------- */
+function filasTablaFiltradasOrdenadas(){
+  const { sortField, sortDir, search } = STATE.tableState;
+  let filas = STATE.filtered;
+  if(search){
+    const s = normalizarTexto(search);
+    filas = filas.filter(f =>
+      normalizarTexto(f.guia).includes(s) || normalizarTexto(f.ciudad).includes(s) ||
+      normalizarTexto(f.punto).includes(s) || normalizarTexto(f.responsable).includes(s) ||
+      normalizarTexto(f.estado).includes(s) || normalizarTexto(f.novedad).includes(s)
+    );
+  }
+  const copia = [...filas];
+  copia.sort((a,b)=>{
+    let va = a[sortField], vb = b[sortField];
+    if(sortField==='fecha'){ va = va? va.getTime():0; vb = vb? vb.getTime():0; }
+    if(sortField==='cumple'){ va = va===true?1:(va===false?0:-1); vb = vb===true?1:(vb===false?0:-1); }
+    if(typeof va === 'string') va = normalizarTexto(va);
+    if(typeof vb === 'string') vb = normalizarTexto(vb);
+    if(va===null||va===undefined) va = sortDir==='asc'? Infinity : -Infinity;
+    if(vb===null||vb===undefined) vb = sortDir==='asc'? Infinity : -Infinity;
+    if(va<vb) return sortDir==='asc'? -1:1;
+    if(va>vb) return sortDir==='asc'? 1:-1;
+    return 0;
+  });
+  return copia;
+}
+
+function renderTablaOperativa(){
+  const filas = filasTablaFiltradasOrdenadas();
+  const totalPaginas = Math.max(1, Math.ceil(filas.length / CONFIG.PAGINA_TABLA));
+  STATE.tableState.page = Math.min(STATE.tableState.page, totalPaginas);
+  const inicio = (STATE.tableState.page-1)*CONFIG.PAGINA_TABLA;
+  const pagina = filas.slice(inicio, inicio+CONFIG.PAGINA_TABLA);
+
+  document.getElementById('tablaOperativaBody').innerHTML = pagina.length ? pagina.map(f=>{
+    const nivel = f.cumple===true?'green':(f.cumple===false?'red':'yellow');
+    const texto = f.cumple===true?'Cumple':(f.cumple===false?'No cumple':'N/D');
+    return `<tr>
+      <td class="num">${f.fechaTexto || 'N/D'}</td>
+      <td>${f.guia || 'N/D'}</td>
+      <td>${f.ciudad || 'N/D'}</td>
+      <td>${f.punto || 'N/D'}</td>
+      <td>${f.responsable || 'N/D'}</td>
+      <td>${f.estado || 'N/D'}</td>
+      <td><span class="badge ${nivel}">${texto}</span></td>
+      <td class="num">${f.tiempo!==null? f.tiempo+' min':'N/D'}</td>
+      <td>${f.novedad || 'Ninguna'}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="9" class="empty-note">No se encontraron registros.</td></tr>`;
+
+  document.getElementById('tablaPaginacion').innerHTML = `
+    <button id="btnPagAnt" ${STATE.tableState.page<=1?'disabled':''}>‹ Anterior</button>
+    <span>Página ${STATE.tableState.page} de ${totalPaginas} · ${formatoNumero(filas.length)} registros</span>
+    <button id="btnPagSig" ${STATE.tableState.page>=totalPaginas?'disabled':''}>Siguiente ›</button>
+  `;
+  const btnAnt = document.getElementById('btnPagAnt');
+  const btnSig = document.getElementById('btnPagSig');
+  if(btnAnt) btnAnt.addEventListener('click', ()=>{ STATE.tableState.page--; renderTablaOperativa(); });
+  if(btnSig) btnSig.addEventListener('click', ()=>{ STATE.tableState.page++; renderTablaOperativa(); });
+
+  document.querySelectorAll('#tablaOperativa th[data-field]').forEach(th=>{
+    const campo = th.dataset.field;
+    th.textContent = th.textContent.replace(/ ▲| ▼/g,'') + (STATE.tableState.sortField===campo ? (STATE.tableState.sortDir==='asc'?' ▲':' ▼') : '');
+  });
+}
+
+function exportarExcel(){
+  const filas = filasTablaFiltradasOrdenadas();
+  const datos = filas.map(f=>({
+    Fecha:f.fechaTexto, Guia:f.guia, Ciudad:f.ciudad, Punto:f.punto, Responsable:f.responsable,
+    Estado:f.estado, Cumplimiento: f.cumple===true?'Cumple':(f.cumple===false?'No cumple':'N/D'),
+    'Tiempo (min)':f.tiempo, Novedad:f.novedad
+  }));
+  const ws = XLSX.utils.json_to_sheet(datos);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Tabla Operativa");
+  XLSX.writeFile(wb, `torre_control_operativa_${toInputDate(new Date())}.xlsx`);
+}
+
+function exportarPDF(){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'landscape' });
+  doc.setFontSize(14); doc.text("HEEL Colombia · Torre de Control Operativa", 14, 14);
+  doc.setFontSize(10); doc.text(`Generado: ${new Date().toLocaleString('es-CO')}`, 14, 20);
+  const filas = filasTablaFiltradasOrdenadas();
+  doc.autoTable({
+    startY:26,
+    head:[["Fecha","Guía","Ciudad","Punto","Responsable","Estado","Cumplimiento","Tiempo","Novedad"]],
+    body: filas.map(f=>[f.fechaTexto, f.guia, f.ciudad, f.punto, f.responsable, f.estado, f.cumple===true?'Cumple':(f.cumple===false?'No cumple':'N/D'), f.tiempo!==null?f.tiempo+' min':'N/D', f.novedad]),
+    styles:{fontSize:7}, headStyles:{fillColor:[15,108,189]}
+  });
+  doc.save(`torre_control_operativa_${toInputDate(new Date())}.pdf`);
+}
+
+function imprimirTabla(){
+  window.print();
+}
+
+/* ---------------------------------------------------------------
+   22. TEMA CLARO / OSCURO
+   --------------------------------------------------------------- */
+function aplicarTema(tema){
+  document.documentElement.setAttribute('data-theme', tema);
+  localStorage.setItem('torreControlTema', tema);
+  document.querySelectorAll('#themeToggle button').forEach(b=>b.classList.toggle('active', b.dataset.themeBtn===tema));
+  if(STATE.map){
+    setTimeout(aplicarFiltroTilesSegunTema, 50);
+    renderizarTodo();
+  }
+}
+
+function inicializarTema(){
+  const guardado = localStorage.getItem('torreControlTema') || 'light';
+  aplicarTema(guardado);
+  document.getElementById('themeToggle').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-theme-btn]');
+    if(!btn) return;
+    aplicarTema(btn.dataset.themeBtn);
+  });
+}
+
+/* ---------------------------------------------------------------
+   23. ORQUESTADOR DE RENDERIZADO
+   --------------------------------------------------------------- */
+// Configuración compartida de módulos: se usa tanto para el renderizado
+// completo (renderizarTodo) como para las pestañas de navegación (evita
+// mantener dos listas de módulos sincronizadas a mano).
+const MODULOS_CONFIG = [
+  { id:1,  corto:"Resumen ejecutivo",       nombre:"Resumen Ejecutivo",                    fn:renderKPIs },
+  { id:2,  corto:"Índice operativo",        nombre:"Índice Operativo",                     fn:renderIndiceOperativo },
+  { id:3,  corto:"Comportamiento",          nombre:"Comportamiento Operativo",             fn:renderComportamiento },
+  { id:4,  corto:"Cumplimiento",            nombre:"Cumplimiento",                         fn:renderCumplimiento },
+  { id:5,  corto:"Productividad",           nombre:"Productividad por Franja",             fn:renderFranja },
+  { id:6,  corto:"Novedades",               nombre:"Novedades",                            fn:renderNovedades },
+  { id:7,  corto:"Tipo de negocio",         nombre:"Segmentación por Tipo de Negocio",     fn:renderTipoNegocio },
+  { id:8,  corto:"Sin cumplimiento",        nombre:"Pedidos sin Cumplimiento",             fn:renderPedidosSinCumplimiento },
+  { id:9,  corto:"Ticket promedio",         nombre:"Ticket Promedio",                      fn:renderTicketPromedio },
+  { id:10, corto:"Ranking nacional",        nombre:"Ranking Nacional",                     fn:renderRankingNacional },
+  { id:11, corto:"Centro de alertas",       nombre:"Centro de Alertas",                    fn:renderAlertas },
+  { id:12, corto:"Insights del día",        nombre:"Insights del Día",                     fn:renderInsights },
+  { id:13, corto:"Mapa nacional",           nombre:"Mapa Nacional",                        fn:renderMapa },
+  { id:14, corto:"Tabla operativa",         nombre:"Tabla Operativa",                      fn:renderTablaOperativa }
+];
+
+// Agrupación de los 14 módulos en "carpetas" para la navegación lateral.
+const CARPETAS_CONFIG = [
+  { nombre:"Resumen",             icono:"📂", modulos:[1,2] },
+  { nombre:"Operación",           icono:"📁", modulos:[3,4,5,7] },
+  { nombre:"Novedades y alertas", icono:"📁", modulos:[6,8,11,12] },
+  { nombre:"Financiero",          icono:"📁", modulos:[9,10] },
+  { nombre:"Mapa y detalle",      icono:"📁", modulos:[13,14] }
+];
+
+function renderizarTodo(){
+  MODULOS_CONFIG.forEach(({nombre, fn})=>{
+    try{
+      fn();
+    }catch(err){
+      console.error(`Error renderizando el módulo "${nombre}":`, err);
+    }
+  });
+}
+
+/* ---------------------------------------------------------------
+   NAVEGACIÓN EN CARPETAS (barra lateral)
+   --------------------------------------------------------------- */
+function construirTabs(){
+  const nav = document.getElementById('folderNav');
+  nav.innerHTML = CARPETAS_CONFIG.map((carpeta, idxCarpeta) => `
+    <button class="folder-header" data-carpeta-id="${idxCarpeta}">
+      <span>${carpeta.icono}</span><span>${carpeta.nombre}</span>
+    </button>`).join('');
+
+  if(!nav.dataset.listenerListo){
+    nav.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button[data-carpeta-id]');
+      if(btn) mostrarCarpeta(parseInt(btn.dataset.carpetaId, 10));
+    });
+    nav.dataset.listenerListo = "1";
+  }
+}
+
+// Muestra TODOS los módulos que pertenecen a la carpeta seleccionada, uno
+// debajo del otro en la misma vista (ej. la carpeta "Operación" muestra
+// Comportamiento, Cumplimiento, Productividad y Tipo de Negocio juntos),
+// en vez de navegar módulo por módulo dentro de la carpeta.
+function mostrarCarpeta(idxCarpeta){
+  STATE.carpetaActual = idxCarpeta;
+  const carpeta = CARPETAS_CONFIG[idxCarpeta];
+  if(!carpeta) return;
+
+  document.querySelectorAll('#mainContent .module').forEach(sec=>{
+    const id = parseInt(sec.dataset.tab, 10);
+    sec.classList.toggle('tab-activa', carpeta.modulos.includes(id));
+  });
+  document.querySelectorAll('#folderNav .folder-header').forEach(b=>{
+    b.classList.toggle('active', parseInt(b.dataset.carpetaId,10) === idxCarpeta);
+  });
+
+  // Se vuelven a renderizar todos los módulos de la carpeta: garantiza que
+  // gráficos (Chart.js) y el mapa (Leaflet) midan correctamente su contenedor
+  // ahora que son visibles, en vez de quedar con tamaño 0 por haberse
+  // dibujado mientras estaban ocultos.
+  carpeta.modulos.forEach(id=>{
+    const modulo = MODULOS_CONFIG.find(m => m.id === id);
+    if(modulo){
+      try{ modulo.fn(); }catch(err){ console.error(`Error renderizando el módulo "${modulo.nombre}":`, err); }
+    }
+  });
+
+  document.getElementById('mainContent').scrollIntoView({block:'start', behavior:'instant'});
+  // En pantallas angostas, seleccionar una carpeta cierra la barra lateral.
+  if(window.innerWidth <= 1100){
+    document.getElementById('sidebar').classList.remove('abierta');
+  }
+}
+
+/* ---------------------------------------------------------------
+   24. VALIDACIÓN AUTOMÁTICA (se ejecuta en consola al finalizar la carga)
+   --------------------------------------------------------------- */
+function validarDashboard(){
+  const chequeos = [];
+  const m = calcularMetricas(STATE.filtered);
+  chequeos.push(["Fuente de datos", STATE.isDemo ? "DEMOSTRACIÓN" + (STATE.errorCarga? " — "+STATE.errorCarga:"") : "Google Sheet real"]);
+  chequeos.push(["Registros cargados (DATA)", STATE.data.length]);
+  chequeos.push(["Registros cargados (PROMOCIÓN)", STATE.promo.length]);
+  chequeos.push(["KPI muestran información", m.total >= 0]);
+  chequeos.push(["Tiempo promedio calculado", m.tiempoProm === null || !isNaN(m.tiempoProm)]);
+  chequeos.push(["Ticket promedio obtenido de Promoción de Entradas", STATE.promo.length > 0]);
+  const ciudadesData = new Set(STATE.data.map(d=>normalizarTexto(d.ciudad)));
+  const ciudadesPromo = new Set(STATE.promo.map(p=>normalizarTexto(p.ciudad)));
+  const interseccion = [...ciudadesData].filter(c=>ciudadesPromo.has(c));
+  chequeos.push(["Cruce ciudad DATA↔PROMOCIÓN coincide", STATE.promo.length===0 ? "N/A (falta URL de Promoción)" : (interseccion.length>0 ? `OK (${interseccion.length} ciudades)` : "SIN COINCIDENCIAS — revisar nombres de ciudad")]);
+  const conCoords = STATE.filtered.filter(f=>typeof f.lat==='number' && typeof f.lon==='number');
+  chequeos.push(["Registros con coordenadas válidas", conCoords.length + " de " + STATE.filtered.length]);
+  const porMesDiag = new Map();
+  STATE.data.forEach(f=>{
+    if(f.fecha){
+      const k = `${f.fecha.getFullYear()}-${String(f.fecha.getMonth()+1).padStart(2,'0')}`;
+      porMesDiag.set(k, (porMesDiag.get(k)||0)+1);
+    }
+  });
+  const sinFecha = STATE.data.filter(f=>!f.fecha).length;
+  const aproximadas = STATE.data.filter(f=>f.fechaEsAproximada).length;
+  console.log("%cServicios por mes en DATA (sin filtros aplicados)", "font-weight:bold;");
+  console.table([...porMesDiag.entries()].sort().map(([mes,cant])=>({Mes:mes, Servicios:cant})));
+  chequeos.push(["Filas totales en DATA (sin filtrar)", STATE.data.length]);
+  chequeos.push(["Filas sin ninguna fecha (excluidas de gráficas por fecha)", sinFecha]);
+  chequeos.push(["Filas con fecha aproximada (fecha_creación, no fecha_entrega)", aproximadas]);
+  chequeos.push(["Heatmap disponible", typeof L !== 'undefined' && typeof L.heatLayer === 'function']);
+  chequeos.push(["MarkerCluster disponible", typeof L !== 'undefined' && typeof L.markerClusterGroup === 'function']);
+  chequeos.push(["Filtros afectan los módulos", true]);
+  chequeos.push(["Tema claro/oscuro funcional", !!document.documentElement.getAttribute('data-theme')]);
+  console.log("%cValidación de la Torre de Control Operativa", "font-weight:bold;font-size:13px;");
+  console.table(chequeos.map(([nombre, valor])=>({Validación:nombre, Resultado: valor})));
+}
+
+/* ---------------------------------------------------------------
+   25. ARRANQUE DE LA APLICACIÓN
+   --------------------------------------------------------------- */
+function actualizarFechaEncabezado(){
+  const hoy = new Date();
+  document.getElementById('fechaActual').textContent = hoy.toLocaleDateString('es-CO', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+}
+
+// Se llama justo después de que termina de cargar el CSV (al abrir la página o
+// al presionar "Actualizar Datos"), para reflejar el momento REAL en que se
+// trajeron los datos — no una hora fija de referencia.
+function marcarUltimaActualizacion(){
+  const ahora = new Date();
+  const horaTexto = ahora.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit', hour12:true });
+  const fechaTexto = ahora.toLocaleDateString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric' });
+  document.getElementById('horaActualizacion').textContent = `${fechaTexto}, ${horaTexto}`;
+}
+
+function conectarEventos(){
+  document.getElementById('btnAplicar').addEventListener('click', aplicarFiltros);
+  document.getElementById('btnLimpiar').addEventListener('click', limpiarFiltros);
+  document.getElementById('btnToggleSidebar').addEventListener('click', ()=>{
+    document.getElementById('sidebar').classList.toggle('abierta');
+  });
+  document.getElementById('btnActualizar').addEventListener('click', async ()=>{
+    document.getElementById('loadingScreen').classList.remove('hidden');
+    setLoaderProgress(20, "Actualizando datos…");
+    try{
+      await cargarDatos();
+      poblarFiltros();
+      construirLayout();
+      construirTabs();
+      poblarFiltros();
+      conectarEventos();
+      aplicarFiltros();
+      mostrarCarpeta(STATE.carpetaActual !== undefined ? STATE.carpetaActual : 0);
+      marcarUltimaActualizacion();
+      setLoaderProgress(100, "Actualizado");
+    }catch(err){
+      console.error("Error actualizando datos:", err);
+      mostrarErrorFatal(err.message || err);
+    }finally{
+      setTimeout(ocultarPantallaCarga, 300);
+    }
+  });
+
+  document.getElementById('tablaBuscar').addEventListener('input', debounce((e)=>{
+    STATE.tableState.search = e.target.value;
+    STATE.tableState.page = 1;
+    renderTablaOperativa();
+  }, 250));
+
+  document.querySelectorAll('#tablaOperativa th[data-field]').forEach(th=>{
+    th.addEventListener('click', ()=>{
+      const campo = th.dataset.field;
+      if(STATE.tableState.sortField === campo){
+        STATE.tableState.sortDir = STATE.tableState.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        STATE.tableState.sortField = campo;
+        STATE.tableState.sortDir = 'asc';
+      }
+      renderTablaOperativa();
+    });
+  });
+
+  document.getElementById('btnExportExcel').addEventListener('click', exportarExcel);
+  document.getElementById('btnExportPDF').addEventListener('click', exportarPDF);
+  document.getElementById('btnImprimir').addEventListener('click', imprimirTabla);
+}
+
+function ocultarPantallaCarga(){
+  const pantalla = document.getElementById('loadingScreen');
+  if(pantalla) pantalla.classList.add('hidden');
+}
+
+function mostrarErrorFatal(mensaje){
+  const main = document.getElementById('mainContent') || document.body;
+  const div = document.createElement('div');
+  div.className = 'demo-banner';
+  div.style.margin = '24px 0';
+  div.innerHTML = `⚠ Ocurrió un error inesperado construyendo el dashboard: <b>${mensaje}</b>. Revise la consola del navegador (F12) para más detalle.`;
+  main.prepend(div);
+}
+
+async function iniciarAplicacion(){
+  try{
+    actualizarFechaEncabezado();
+    inicializarTema();
+    setLoaderProgress(5, "Iniciando Torre de Control Operativa…");
+    await cargarDatos();
+    construirLayout();
+    construirTabs();
+    poblarFiltros();
+    conectarEventos();
+    try{
+      aplicarFiltros();
+    }catch(errRender){
+      console.error("Error renderizando los módulos:", errRender);
+      mostrarErrorFatal(errRender.message || errRender);
+    }
+    mostrarCarpeta(0);
+    marcarUltimaActualizacion();
+    setLoaderProgress(100, "Listo");
+    validarDashboard();
+  }catch(errFatal){
+    console.error("Error fatal iniciando la aplicación:", errFatal);
+    construirLayout();
+    construirTabs();
+    mostrarCarpeta(0);
+    mostrarErrorFatal(errFatal.message || errFatal);
+  }finally{
+    setTimeout(ocultarPantallaCarga, 350);
+  }
+}
+
+// Red de seguridad: cualquier excepción no controlada en cualquier punto de la
+// aplicación libera la pantalla de carga en vez de dejarla bloqueada para siempre.
+window.addEventListener('error', ()=> ocultarPantallaCarga(), true);
+window.addEventListener('unhandledrejection', ()=> ocultarPantallaCarga());
+
+document.addEventListener('DOMContentLoaded', iniciarAplicacion);
+</script>
+</body>
+</html>
+</body>
+</html>
